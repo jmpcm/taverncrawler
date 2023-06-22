@@ -1,0 +1,163 @@
+{
+    "name": "tavern-tracker",
+    "displayName": "tavern-tracker",
+    "description": "",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.74.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "onView:nodeDependencies"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "taverntracker-container",
+                    "title": "Tavern Tracker",
+                    "icon": "resources/icon.png"
+                }
+            ]
+        },
+        "views": {
+            "taverntracker-container": [
+                {
+                    "id": "taverntracker",
+                    "name": "Tests"
+                }
+            ]
+        },
+        "commands": [
+            {
+                "command": "taverntracker.runTests",
+                "title": "Run tests",
+                "icon": {
+                    "dark": "resources/dark/run-all.svg",
+                    "light": "resources/light/run-all.svg"
+                }
+            },
+            {
+                "command": "taverntracker.refresh",
+                "title": "Refresh",
+                "icon": {
+                    "light": "resources/light/refresh.svg",
+                    "dark": "resources/dark/refresh.svg"
+                }
+            },
+            {
+                "command": "taverntracker.runTest",
+                "title": "Run Test",
+                "icon": {
+                    "light": "resources/light/run.svg",
+                    "dark": "resources/dark/run.svg"
+                }
+            },
+            {
+                "command": "taverntracker.debugTest",
+                "title": "Debug Test",
+                "icon": {
+                    "light": "resources/light/debug-alt-small.svg",
+                    "dark": "resources/dark/debug-alt-small.svg"
+                }
+            },
+            {
+                "command": "taverntracker.goToTest",
+                "title": "Go to test",
+                "icon": {
+                    "light": "resources/light/go-to-file.svg",
+                    "dark": "resources/dark/go-to-file.svg"
+                }
+            }
+        ],
+        "menus": {
+            "view/title": [
+                {
+                    "command": "taverntracker.runTests",
+                    "when": "view == taverntracker",
+                    "group": "navigation"
+                },
+                {
+                    "command": "taverntracker.refresh",
+                    "when": "view == taverntracker",
+                    "group": "navigation"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "taverntracker.runTest",
+                    "when": "viewItem == tavernTestTreeItem",
+                    "group": "inline@0"
+                },
+                {
+                    "command": "taverntracker.goToTest",
+                    "when": "viewItem == tavernTestTreeItem",
+                    "group": "inline@1"
+                }
+            ]
+        },
+        "colors": [
+            {
+                "id": "tavernTracker.test.skipped.backgroundColor",
+                "description": "Background color to be used in a decoration of a skipped test.",
+                "defaults": {
+                    "dark": "#fbc02d4d",
+                    "light": "#fbc02d4d",
+                    "highContrast": "#f0f8084d",
+                    "highContrastLight": "#f0f8084d"
+                }
+            },
+            {
+                "id": "tavernTracker.test.skipped.border",
+                "description": "Border color to be used in a decoration of a skipped test.",
+                "defaults": {
+                    "dark": "#ffee58cc",
+                    "light": "#ffee58cc",
+                    "highContrast": "#ffee58cc",
+                    "highContrastLight": "#ffee58cc"
+                }
+            },
+            {
+                "id": "tavernTracker.test.skipped.icon",
+                "description": "Border color to be used in a decoration of a skipped test.",
+                "defaults": {
+                    "dark": "#f5dd06",
+                    "light": "#f5dd06",
+                    "highContrast": "#f5dd06",
+                    "highContrastLight": "#f5dd06"
+                }
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "pretest": "npm run compile && npm run lint",
+        "lint": "eslint src --ext ts",
+        "test": "node ./out/test/runTest.js"
+    },
+    "devDependencies": {
+        "@types/glob": "^8.1.0",
+        "@types/jest": "^29.5.2",
+        "@types/mocha": "^10.0.1",
+        "@types/node": "16.x",
+        "@types/vscode": "^1.78.0",
+        "@typescript-eslint/eslint-plugin": "^5.59.1",
+        "@typescript-eslint/parser": "^5.59.1",
+        "@vscode/test-electron": "^2.3.0",
+        "eslint": "^8.39.0",
+        "glob": "^8.1.0",
+        "jest": "^29.5.0",
+        "mocha": "^10.2.0",
+        "ts-jest": "^29.1.0",
+        "typescript": "^5.0.4"
+    },
+    "dependencies": {
+        "fast-xml-parser": "^4.2.2",
+        "yaml": "^2.2.2"
+    }
+}
