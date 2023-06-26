@@ -167,25 +167,34 @@ export class TavernTestManager {
                 return test;
             }));
 
-            this._tests.addTest(tests);
+            this._tests.setTest(tests);
         }
 
         return this._tests;
     }
 
-    async loadTestResults(): Promise<TavernTestTree>;
-    async loadTestResults(resultsFile: string): Promise<TavernTestTree>;
-    async loadTestResults(resultsFile?: string | undefined): Promise<TavernTestTree> {
-        const resultsFileToLoad = resultsFile === undefined
-            ? TavernTestManager.TAVERN_JUNIT_FILE_PATH
-            : resultsFile;
+    async loadTestResults(testFiles?: string[]): Promise<TavernTestTree> {
+        let tree: TavernTestTree = this._tests;
 
-        if (existsSync(resultsFileToLoad)) {
-            let junitResults = await this.loadTestResultsFromJunit(resultsFileToLoad);
+        if (testFiles !== undefined) {
+            for (let file of testFiles) {
+                tree.forEach((test) => {
+                    if (test.nodeId.startsWith(basename(file))) {
+                        tree.delete(test.nodeId);
+                    }
+                });
+            }
 
-            return this.matchTestResults(this._tests, junitResults);
+            tree = await this.loadTestFiles(testFiles);
+        }
+
+        if (existsSync(TavernTestManager.TAVERN_JUNIT_FILE_PATH)) {
+            let junitResults = await this.loadTestResultsFromJunit(
+                TavernTestManager.TAVERN_JUNIT_FILE_PATH);
+
+            return this.matchTestResults(tree, junitResults);
         } else {
-            return this._tests;
+            return tree;
         }
     }
 
@@ -233,20 +242,6 @@ export class TavernTestManager {
     private matchTestResults(
         tavernTests: TavernTestTree,
         junitResults: Map<string, TavernTestResult>): TavernTestTree {
-
-        // TODO when a test name is modified, the file must be realoaded because the nodeId changes
-        //      to the new name. This also applies to parameters where one of the values change.
-        //      Because the nodeId changes, when the test results are returned, a match is not found,
-        //      since the test results already have the name of the modified test.
-        //      Hypothesis: when a file is saved, delete the file's nodes and add the new ones. After,
-        //      run the tests and match the results.
-
-
-        // TODO create set with keys of the tests. Then, remove the keys that have been calcualted
-        //      in each iteration and, in the end, mark as unset the keys that have not been passed.
-        //      Might fail, because an incomplete junit file will make all the tests be marked as 
-        //      unset.
-        //      Maybe start hte evaluation with the test's current state?
 
         for (let [testId, testJunitResult] of junitResults) {
             let test = tavernTests.getTest(testId);
@@ -356,7 +351,7 @@ export class TavernTestManager {
             error += chunk;
         }
 
-        return await this.loadTestResults(junitFile);
+        return this.matchTestResults(this._tests, await this.loadTestResultsFromJunit(junitFile));
     }
 
     private hashTest(test: TavernTest): string {

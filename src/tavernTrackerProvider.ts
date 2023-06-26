@@ -133,12 +133,12 @@ export class TavernTrackerProvider implements TreeDataProvider<TavernTestTreeIte
     // structure can be used to do this assertion.
     private decoratorsMap = new DecorationsMap();
     private _onDidChangeTreeData = new EventEmitter<TavernTestTreeItem | undefined>();
-    readonly onDidChangeTreeData?: Event<TavernTestTreeItem | undefined> =
-        this._onDidChangeTreeData.event;
     private readonly _testsManager: TavernTestManager;
     private _treeNodes: TavernTestTreeItem[] = [];
     private _workspaceTavernFiles = new Map<string, Uri>();
 
+    readonly onDidChangeTreeData?: Event<TavernTestTreeItem | undefined> =
+        this._onDidChangeTreeData.event;
 
     constructor(private context: ExtensionContext) {
         const workspacePath = workspace.workspaceFolders && workspace.workspaceFolders.length > 0
@@ -146,9 +146,30 @@ export class TavernTrackerProvider implements TreeDataProvider<TavernTestTreeIte
             : "undefined";
 
         this._testsManager = new TavernTestManager(workspacePath);
+
+        workspace.onDidSaveTextDocument(async (document) => {
+            const tests = await this._testsManager.loadTestResults([document.uri.fsPath]);
+
+            // Repopulate the tree
+            this._treeNodes.length = 0;
+            for (let test of tests.filter(TavernTestType.File)) {
+                let treeItem = new TavernTestTreeItem(test);
+                treeItem.addChildren(test.childrenTests);
+
+                this._treeNodes.push(treeItem);
+            }
+            this._onDidChangeTreeData.fire(undefined);
+        });
     }
 
+    private async decorateFile(editor: TextEditor): Promise<void> {
+        let document = editor.document;
+        let node = this._treeNodes.find(n => n.test.fileName === basename(document.fileName));
 
+        for (const child of node?.children!) {
+            this.decoratorsMap.setDecoration(editor, child);
+        }
+    }
 
     private async discoverTavernTestFiles(): Promise<Map<string, Uri>> {
         let files = await workspace.findFiles('**.tavern.yaml');
@@ -164,15 +185,6 @@ export class TavernTrackerProvider implements TreeDataProvider<TavernTestTreeIte
         }
 
         return Promise.resolve(this._treeNodes);
-    }
-
-    private async decorateFile(editor: TextEditor): Promise<void> {
-        let document = editor.document;
-        let node = this._treeNodes.find(n => n.test.fileName === basename(document.fileName));
-
-        for (const child of node?.children!) {
-            this.decoratorsMap.setDecoration(editor, child);
-        }
     }
 
     getTreeItem = (node: TavernTestTreeItem) => node;
