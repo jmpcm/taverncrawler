@@ -167,7 +167,7 @@ export class TavernTestManager {
                 return test;
             }));
 
-            this._tests.addTest(fileName, tests);
+            this._tests.addTest(tests);
         }
 
         return this._tests;
@@ -182,9 +182,8 @@ export class TavernTestManager {
 
         if (existsSync(resultsFileToLoad)) {
             let junitResults = await this.loadTestResultsFromJunit(resultsFileToLoad);
-            this._tests = this.matchTestResults(this._tests, junitResults);
 
-            return this._tests;
+            return this.matchTestResults(this._tests, junitResults);
         } else {
             return this._tests;
         }
@@ -220,7 +219,7 @@ export class TavernTestManager {
             }
 
             let junitTest: TavernTestResult = {
-                name: testcase['@_name'],
+                name: `${testcase['@_classname']}::${testcase['@_name']}`,
                 failure: failure,
                 state: state
             };
@@ -235,22 +234,36 @@ export class TavernTestManager {
         tavernTests: TavernTestTree,
         junitResults: Map<string, TavernTestResult>): TavernTestTree {
 
-        for (let [, tests] of tavernTests) {
-            for (let [testName, test] of tests) {
-                let testJunitResult = junitResults.get(testName);
+        // TODO when a test name is modified, the file must be realoaded because the nodeId changes
+        //      to the new name. This also applies to parameters where one of the values change.
+        //      Because the nodeId changes, when the test results are returned, a match is not found,
+        //      since the test results already have the name of the modified test.
+        //      Hypothesis: when a file is saved, delete the file's nodes and add the new ones. After,
+        //      run the tests and match the results.
 
-                if (testJunitResult !== undefined) {
-                    test.result = testJunitResult;
-                }
 
-                // Set the results for the parameter tests.
-                if (test.type === TavernTestType.Test && test.childrenTests.length > 0) {
-                    for (let paramTest of test.childrenTests) {
-                        let paramTestJunitResult = junitResults.get(`${test.name}[${paramTest.name}]`);
+        // TODO create set with keys of the tests. Then, remove the keys that have been calcualted
+        //      in each iteration and, in the end, mark as unset the keys that have not been passed.
+        //      Might fail, because an incomplete junit file will make all the tests be marked as 
+        //      unset.
+        //      Maybe start hte evaluation with the test's current state?
 
-                        if (paramTestJunitResult !== undefined) {
-                            paramTest.result = paramTestJunitResult;
-                        }
+        for (let [testId, testJunitResult] of junitResults) {
+            let test = tavernTests.getTest(testId);
+
+            if (test === undefined) {
+                continue;
+            }
+
+            test.result = testJunitResult;
+
+            // Set the results for the parameter tests.
+            if (test.type === TavernTestType.Test && test.childrenTests.length > 0) {
+                for (let paramTest of test.childrenTests) {
+                    let paramTestJunitResult = junitResults.get(`${test.name}[${paramTest.name}]`);
+
+                    if (paramTestJunitResult !== undefined) {
+                        paramTest.result = paramTestJunitResult;
                     }
                 }
             }

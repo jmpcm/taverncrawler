@@ -214,14 +214,13 @@ export class TavernTrackerProvider implements TreeDataProvider<TavernTestTreeIte
         this._treeNodes.length = 0;
 
         const testFiles = await this.discoverTavernTestFiles();
-        // this._testsManager.addTestFiles(Array.from(testFiles.values()).map(t => t.fsPath));
         await this._testsManager.loadTestFiles(Array.from(testFiles.values()).map(t => t.fsPath));
 
         let tests = await this._testsManager.loadTestResults();
 
-        for (let [file, fileTests] of tests) {
-            let treeItem = new TavernTestTreeItem(tests.getTest(file)!);
-            treeItem.addChildren(Array.from(fileTests.values()) ?? []);
+        for (let test of tests.filter(TavernTestType.File)) {
+            let treeItem = new TavernTestTreeItem(test);
+            treeItem.addChildren(test.childrenTests);
 
             this._treeNodes.push(treeItem);
         }
@@ -234,16 +233,15 @@ export class TavernTrackerProvider implements TreeDataProvider<TavernTestTreeIte
         this._onDidChangeTreeData.fire(undefined);
 
         const testFiles = await this.discoverTavernTestFiles();
-        // this._testsManager.addTestFiles(Array.from(testFiles.values()).map(t => t.fsPath));
         this._testsManager.loadTestFiles(Array.from(testFiles.values()).map(t => t.fsPath));
 
         let tests = await this._testsManager.runTest();
-        
+
         // Repopulate the tree
         this._treeNodes.length = 0;
-        for (let [file, fileTests] of tests) {
-            let treeItem = new TavernTestTreeItem(tests.getTest(file)!);
-            treeItem.addChildren(Array.from(fileTests.values()) ?? []);
+        for (let test of tests.filter(TavernTestType.File)) {
+            let treeItem = new TavernTestTreeItem(test);
+            treeItem.addChildren(test.childrenTests);
 
             this._treeNodes.push(treeItem);
         }
@@ -256,8 +254,7 @@ export class TavernTrackerProvider implements TreeDataProvider<TavernTestTreeIte
         applyIconToTreeItems(item.children, getIcon(TavernTestState.Running));
         this._onDidChangeTreeData.fire(undefined);
 
-        let tests = await this._testsManager.runTest(item.test);
-        item.test.result = tests.getTest(item.test)!.result;
+        await this._testsManager.runTest(item.test);
 
         // Set the tree item's icon with the test's current state, update the state of each of the
         // children items and, finally, set the item's parent icon.

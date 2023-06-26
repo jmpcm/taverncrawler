@@ -1,57 +1,47 @@
 import { TavernTest, TavernTestType } from './tavernTest';
 
 
-export class TavernTestTree extends Map<string, Map<string, TavernTest>> {
-    private fileTests = new Map<string, TavernTest>();
-
-    addTest(test: TavernTest): void;
-    addTest(fileName: string, tests: TavernTest[]): void;
-    addTest(filenameOrTest: string | TavernTest, tests?: TavernTest[]): void {
-        if (filenameOrTest === undefined || filenameOrTest === '') {
-            throw new Error("test object or name can't be undefined or empty");
+export class TavernTestTree extends Map<string, TavernTest> {
+    addTest(test: TavernTest | TavernTest[]): void {
+        if (test === undefined) {
+            throw new Error("test object can't be undefined");
         }
 
-        let fileName = typeof filenameOrTest === 'string' ? filenameOrTest : filenameOrTest.fileName;
-        const testsToAppend = tests !== undefined ? tests : [filenameOrTest as TavernTest];
+        let testsToAppend = test instanceof TavernTest ? [test] : test;
 
-        if (fileName in this) {
-            const file = this.get(fileName);
-            const fileTest = this.fileTests.get(fileName);
+        testsToAppend.forEach(test => {
+            let fileTest = this.get(test.fileName)
+                ?? new TavernTest(test.fileName, TavernTestType.File, test.fileName);
 
-            for (const test of testsToAppend) {
-                test.parentTest = fileTest;
-                file!.set(test.name, test);
+            if (!this.has(fileTest.nodeId)) {
+                this.set(fileTest.nodeId, fileTest);
             }
-        } else {
-            const fileTest = new TavernTest(fileName, TavernTestType.File, fileName);
 
-            fileTest.addTests(testsToAppend);
-            this.fileTests.set(fileName, fileTest);
+            if (test.type === TavernTestType.Test) {
+                test.parentTest = fileTest;
+                fileTest.addTests(test);
+                test.childrenTests.forEach(child => this.addTest(child));
+            }
 
-            this.set(fileName, new Map<string, TavernTest>(testsToAppend.map((t: TavernTest) => {
-                t.parentTest = fileTest;
-                return [t.name, t];
-            })));
-        }
+            this.set(test.nodeId, test);
+        });
+    }
+
+    filter(type: TavernTestType): TavernTest[] {
+        let results: TavernTest[] = [];
+
+        this.forEach((test, _) => {
+            if (test.type === type) {
+                results.push(test);
+            }
+        });
+
+        return results;
     }
 
     getTest(test: TavernTest): TavernTest | undefined;
-    getTest(fileName: string, nodeId?: string): TavernTest | undefined;
-    getTest(fileNameOrTest: string | TavernTest, nodeId?: string): TavernTest | undefined {
-        // Overload getTest(fileName: string, nodeId: string): TavernTest | undefined;
-        if (typeof fileNameOrTest === 'string' && nodeId !== undefined) {
-            return this.get(fileNameOrTest)?.get(nodeId);
-        } else if (typeof fileNameOrTest === 'string' && nodeId === undefined) {
-            return this.fileTests.get(fileNameOrTest);
-        }
-
-        // Overload getTest(test: TavernTest): TavernTest | undefined;
-        if (fileNameOrTest instanceof TavernTest) {
-            if (fileNameOrTest.type === TavernTestType.File) {
-                return this.fileTests.get(fileNameOrTest.fileName);
-            }
-
-            return this.get(fileNameOrTest.fileName)?.get(fileNameOrTest.name);
-        }
+    getTest(nodeId: string): TavernTest | undefined;
+    getTest(testOrNodeId: string | TavernTest | TavernTestType): TavernTest | TavernTest[] | undefined {
+        return this.get(testOrNodeId instanceof TavernTest ? testOrNodeId.nodeId : testOrNodeId);
     }
 }

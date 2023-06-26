@@ -13,37 +13,11 @@ export enum TavernTestType {
 
 
 export enum TavernTestState {
-    Fail = 'fail',
-    Pass = 'pass',
-    Running = 'running',
-    Skipped = 'skipped', // This state can occur when the test is marked as xfail, skip or skipif
-    Unset = 'unset'
-}
-
-function calculateState(state0: TavernTestState, state1: TavernTestState): TavernTestState {
-    // TODO the eavluation should always be to the worst case. the order is something like
-            // 1. FAIL
-            // 2. SKIP
-            // 3. PASS
-            // 4. UNSET
-    // See set result() for more information.
-
-    if (state0 === TavernTestState.Fail || state1 === TavernTestState.Fail) {
-        return TavernTestState.Fail;
-    } else if (state0 === TavernTestState.Running || state1 === TavernTestState.Running) {
-        return TavernTestState.Running;
-    } else if (state0 !== TavernTestState.Unset && state1 === TavernTestState.Unset) {
-        return state0;
-    } else if (state0 === TavernTestState.Unset && state1 !== TavernTestState.Unset) {
-        return state1;
-    } else if (state0 === TavernTestState.Pass && state1 !== TavernTestState.Pass
-        || state0 === TavernTestState.Skipped && state1 !== TavernTestState.Skipped) {
-        return state1;
-    } else if (state0 === state1) {
-        return state0;
-    }
-
-    return state0;
+    Fail = 10,
+    Skipped = 7, // This state can occur when the test is marked as xfail, skip or skipif
+    Unset = 5,
+    Pass = 3,
+    Running = 1
 }
 
 
@@ -65,13 +39,14 @@ export interface TavernTestStage {
 
 
 export class TavernTest {
+    static DEFAULT_STATE: TavernTestState = TavernTestState.Unset;
     readonly description: string = '';
     fileLine: number = 1;
     // private globalVariables = new Map<string, any>();
     private _nodeId: string; // pytest's nodeId. The ID usually has the format <filename>::<testname>.
-    public parentTest?: TavernTest = undefined;
+    public _parentTest?: TavernTest = undefined;
     // private otherMarks: string[] = [];
-    private _childrenTests: TavernTest[] = [];
+    private _childrenTests = new Map<string, TavernTest>();
     private _result: TavernTestResult;
     private _stages: TavernTestStage[] = [];
     // private _parameters: string[] = [];
@@ -86,25 +61,33 @@ export class TavernTest {
         this._result = {
             failure: undefined,
             name: '',
-            state: TavernTestState.Unset
+            state: TavernTest.DEFAULT_STATE
         };
         this.fileName = fileName;
+
         this._nodeId = this.type === TavernTestType.File
             ? `${this.fileName}`
             : `${this.fileName}::${name}`;
     }
 
     get childrenTests(): TavernTest[] {
-        return this._childrenTests;
+        return Array.from(this._childrenTests.values());
     }
 
     get nodeId(): string {
         return this._nodeId;
     }
 
-    get stages(): TavernTestStage[] {
-        return this._stages;
-    };
+    get parentTest(): TavernTest | undefined {
+        return this._parentTest;
+    }
+
+    set parentTest(test: TavernTest) {
+        this._parentTest = test;
+        if (this.type === TavernTestType.ParameterTest) {
+            this._nodeId = `${this.fileName}::${this._parentTest.name}[${this.name}]`;
+        }
+    }
 
     get result(): TavernTestResult {
         return this._result;
@@ -114,23 +97,18 @@ export class TavernTest {
         this._result = result;
         this.result.state = this.evaluateState();
 
-        if (this.parentTest !== undefined) {
-
-            // TODO the eavluation should always be to the worst case. the order is something like
-            // 1. FAIL
-            // 2. SKIP
-            // 3. PASS
-            // 4. UNSET
-
-
-            this.parentTest.result = {
+        if (this._parentTest !== undefined) {
+            this._parentTest.result = {
                 name: '',
                 failure: undefined,
-                // state: calculateState(this.parentTest.result.state, this.result.state)
-                state: calculateState(this.parentTest.evaluateState(), this.result.state)
+                state: this._parentTest.evaluateState()
             };
         }
     }
+
+    get stages(): TavernTestStage[] {
+        return this._stages;
+    };
 
     /**
      * Add global variables to the test. The test can later resolve any variables when adding stages
@@ -157,30 +135,30 @@ export class TavernTest {
             throw new Error(`parameters can only be added to tests of type Test (this is ${this.type})`);
         }
 
-        if (this._childrenTests.length === 0) {
+        if (this._childrenTests.size === 0) {
             for (let param of parameters) {
                 let name = Array.isArray(param) ? param.join('-') : param.toString();
 
                 let paramTest = new TavernTest(
-                    name,
+                    `${name}`,
                     TavernTestType.ParameterTest,
                     this.fileName);
                 paramTest.fileLine = this.fileLine;
                 paramTest.parentTest = this;
 
-                this._childrenTests.push(paramTest);
+                this._childrenTests.set(paramTest.nodeId, paramTest);
             }
         } else {
-            // The test already has parameters, thus merge these with the new ones. Tavern names
-            // parameter tests by joining all parameters, separated by an hifen.
+            // If the test already has parameters, then merge these with the new ones. Tavern
+            // parameter tests named are formed by joining all parameters, separated by an hifen.
             let newTestNameParameters: TavernTest[] = [];
 
             for (let testNameParam of parameters) {
                 newTestNameParameters.push.apply(
                     newTestNameParameters,
-                    this._childrenTests.map(t => {
+                    Array.from(this._childrenTests).map(([testNodeId, test]) => {
                         let paramTest = new TavernTest(
-                            `${t.name}-${testNameParam.toString()}`,
+                            `${test.name}-${testNameParam.toString()}`,
                             TavernTestType.ParameterTest,
                             this.fileName);
                         paramTest.fileLine = this.fileLine;
@@ -191,8 +169,8 @@ export class TavernTest {
                     ));
             }
 
-            this._childrenTests.length = 0;
-            this._childrenTests = newTestNameParameters;
+            this._childrenTests = new Map<string, TavernTest>(
+                newTestNameParameters.map(t => [t.nodeId, t]));
         }
     }
 
@@ -209,9 +187,9 @@ export class TavernTest {
      * @param tests 
      */
     addTests(tests: TavernTest[] | TavernTest): void {
-        this._childrenTests.push.apply(
-            this._childrenTests,
-            Array.isArray(tests) ? tests : [tests]);
+        for (const test of Array.isArray(tests) ? tests : [tests]) {
+            this._childrenTests.set(test.nodeId, test);
+        }
     }
 
     /**
@@ -222,18 +200,20 @@ export class TavernTest {
      * @returns the current state of the test
      */
     private evaluateState(children?: TavernTest[] | undefined): TavernTestState {
-        if (children === undefined || children.length === 0) {
+        let childrenToEvaluate = children === undefined ? this.childrenTests : children;
+
+        if (childrenToEvaluate.length === 0) {
             return this._result.state;
         }
 
-        let state = this._result.state;
+        let state = childrenToEvaluate.at(0)?.result.state ?? TavernTest.DEFAULT_STATE;
 
-        for (const child of children) {
-            if (child._childrenTests.length > 0) {
-                state = this.evaluateState(child._childrenTests);
+        for (const child of childrenToEvaluate) {
+            if (child._childrenTests.size > 0) {
+                child.evaluateState();
             }
 
-            state = calculateState(state, child.result.state);
+            state = state <= child.result.state ? child.result.state : state;
         }
 
         return state;
