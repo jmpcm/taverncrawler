@@ -1,7 +1,7 @@
 import { TavernTest, TavernTestType } from './tavernTest';
 
 
-export class TavernTestTree extends Map<string, TavernTest> {
+export class TavernTestIndex extends Map<string, TavernTest> {
     filter(type: TavernTestType): TavernTest[] {
         let results: TavernTest[] = [];
 

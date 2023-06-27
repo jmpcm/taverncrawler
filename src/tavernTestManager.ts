@@ -5,7 +5,7 @@ import { existsSync, readFile } from 'fs';
 import { basename, dirname, join } from 'path';
 import { promisify } from 'util';
 import { LineCounter, parseAllDocuments } from 'yaml';
-import { TavernTestTree } from './tavernTestTree';
+import { TavernTestIndex } from './tavernTestIndex';
 import { TavernTest, TavernTestType, TavernTestResult, TavernTestState } from './tavernTest';
 
 
@@ -55,14 +55,14 @@ function isSameTest(line: Buffer, testName: string): boolean {
 export class TavernTestManager {
     private static readonly TEST_RESULTS_PATH = '/var/tmp/tavern-tracker';
     private static readonly TAVERN_JUNIT_FILE_PATH = `${TavernTestManager.TEST_RESULTS_PATH}/test_results_junit.xml`;
-    private _tests = new TavernTestTree();
+    private _testsIndex = new TavernTestIndex();
     private globalVariables = new Map<string, Map<string, any>>();
 
     constructor(readonly testsPath: string) {
         this.testsPath = testsPath;
     }
 
-    async getTests(): Promise<TavernTestTree | undefined> {
+    async getTests(): Promise<TavernTestIndex | undefined> {
         return await this.runTest();
     }
 
@@ -104,7 +104,7 @@ export class TavernTestManager {
         }
     }
 
-    async loadTestFiles(testFiles: string[]): Promise<TavernTestTree> {
+    async loadTestFiles(testFiles: string[]): Promise<TavernTestIndex> {
         for (let file of testFiles) {
             const readFileAsync = promisify(readFile);
             const fileContent = await readFileAsync(file);
@@ -167,34 +167,34 @@ export class TavernTestManager {
                 return test;
             }));
 
-            this._tests.setTest(tests);
+            this._testsIndex.setTest(tests);
         }
 
-        return this._tests;
+        return this._testsIndex;
     }
 
-    async loadTestResults(testFiles?: string[]): Promise<TavernTestTree> {
-        let tree: TavernTestTree = this._tests;
+    async loadTestResults(testFiles?: string[]): Promise<TavernTestIndex> {
+        let index: TavernTestIndex = this._testsIndex;
 
         if (testFiles !== undefined) {
             for (let file of testFiles) {
-                tree.forEach((test) => {
+                index.forEach((test) => {
                     if (test.nodeId.startsWith(basename(file))) {
-                        tree.delete(test.nodeId);
+                        index.delete(test.nodeId);
                     }
                 });
             }
 
-            tree = await this.loadTestFiles(testFiles);
+            index = await this.loadTestFiles(testFiles);
         }
 
         if (existsSync(TavernTestManager.TAVERN_JUNIT_FILE_PATH)) {
             let junitResults = await this.loadTestResultsFromJunit(
                 TavernTestManager.TAVERN_JUNIT_FILE_PATH);
 
-            return this.matchTestResults(tree, junitResults);
+            return this.matchTestResults(index, junitResults);
         } else {
-            return tree;
+            return index;
         }
     }
 
@@ -240,8 +240,8 @@ export class TavernTestManager {
     }
 
     private matchTestResults(
-        tavernTests: TavernTestTree,
-        junitResults: Map<string, TavernTestResult>): TavernTestTree {
+        tavernTests: TavernTestIndex,
+        junitResults: Map<string, TavernTestResult>): TavernTestIndex {
 
         for (let [testId, testJunitResult] of junitResults) {
             let test = tavernTests.getTest(testId);
@@ -313,7 +313,7 @@ export class TavernTestManager {
      * @param test 
      * @returns 
      */
-    async runTest(test?: TavernTest): Promise<TavernTestTree> {
+    async runTest(test?: TavernTest): Promise<TavernTestIndex> {
         let pythonPath = 'PYTHONPATH' in process.env
             ? `${process.env.PYTHONPATH}:${this.testsPath}`
             : this.testsPath;
@@ -351,7 +351,7 @@ export class TavernTestManager {
             error += chunk;
         }
 
-        return this.matchTestResults(this._tests, await this.loadTestResultsFromJunit(junitFile));
+        return this.matchTestResults(this._testsIndex, await this.loadTestResultsFromJunit(junitFile));
     }
 
     private hashTest(test: TavernTest): string {
