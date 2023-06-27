@@ -147,7 +147,13 @@ export class TavernTrackerProvider implements TreeDataProvider<TavernTestTreeIte
 
         this._testsManager = new TavernTestManager(workspacePath);
 
-        workspace.onDidSaveTextDocument(async (document) => {
+        window.onDidChangeActiveTextEditor(async (editor) => {
+            if (editor !== undefined) {
+                this.decorateFile(editor);
+            }
+        });
+
+        workspace.onDidSaveTextDocument(async (document: TextDocument) => {
             const tests = await this._testsManager.loadTestResults([document.uri.fsPath]);
 
             // Repopulate the tree
@@ -235,6 +241,15 @@ export class TavernTrackerProvider implements TreeDataProvider<TavernTestTreeIte
             treeItem.addChildren(test.childrenTests);
 
             this._treeNodes.push(treeItem);
+        }
+
+        // If the focused document is a test file, then decorate it.
+        const focusedDocument = window.activeTextEditor?.document;
+
+        if (focusedDocument !== undefined
+            && tests.getTest(basename(focusedDocument.fileName)) !== undefined) {
+            let editor = await window.showTextDocument(focusedDocument);
+            this.decorateFile(editor);
         }
 
         this._onDidChangeTreeData.fire(undefined);
