@@ -1,12 +1,15 @@
 import { spawn } from 'child_process';
-import { createHash } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
-import { existsSync, readFile } from 'fs';
+import { existsSync, mkdirSync, readFile } from 'fs';
+import { createHash } from 'node:crypto';
+import { platform } from 'node:process';
+import { homedir } from 'os';
 import { basename, dirname, join } from 'path';
 import { promisify } from 'util';
 import { LineCounter, parseAllDocuments } from 'yaml';
-import { TavernTestIndex } from './tavernTestIndex';
 import { TavernTest, TavernTestType, TavernTestResult, TavernTestState } from './tavernTest';
+import { TavernTestCache } from './tavernTestCache';
+import { TavernTestIndex } from './tavernTestIndex';
 
 
 /** 
@@ -53,13 +56,31 @@ function isSameTest(line: Buffer, testName: string): boolean {
 
 
 export class TavernTestManager {
-    private static readonly TEST_RESULTS_PATH = '/var/tmp/tavern-tracker';
-    private static readonly TAVERN_JUNIT_FILE_PATH = `${TavernTestManager.TEST_RESULTS_PATH}/test_results_junit.xml`;
+    private _testsCache: TavernTestCache | undefined = undefined;
     private _testsIndex = new TavernTestIndex();
+    private _testsMainJunitFile: string;
+    private _testsResultsPath: string = '/var/tmp/tavern-crawler';
+    private _testsWorkspaceId: string;
     private globalVariables = new Map<string, Map<string, any>>();
 
     constructor(readonly testsPath: string) {
         this.testsPath = testsPath;
+
+        if (platform === 'darwin') {
+            this._testsResultsPath = `${homedir()}/Library/Caches/tavern-crawler`;
+        } else if (platform === 'linux' || platform === 'openbsd' || platform === 'freebsd') {
+            this._testsResultsPath = `${homedir()}/.tavern-crawler`;
+        } else if (platform === 'win32') {
+            this._testsResultsPath = `${process.env.APPDATA}/tavern-crawler`;
+        }
+
+        this._testsWorkspaceId = this.generateHash(this.testsPath);
+        this._testsResultsPath = join(this._testsResultsPath, this._testsWorkspaceId);
+        this._testsMainJunitFile = join(this._testsResultsPath, this._testsWorkspaceId);
+
+        if (!existsSync(this._testsResultsPath)) {
+            mkdirSync(this._testsResultsPath);
+        }
     }
 
     async getTests(): Promise<TavernTestIndex | undefined> {
@@ -176,6 +197,9 @@ export class TavernTestManager {
     async loadTestResults(testFiles?: string[]): Promise<TavernTestIndex> {
         let index: TavernTestIndex = this._testsIndex;
 
+        // Load the test files. If a file has been previously loaded, first delete the results from
+        // the index an rebuild the index for the file. This avoids duplicate entries when calling 
+        // loadTestFiles(), which doesn't look for (therefore, remove) duplicate entries. 
         if (testFiles !== undefined) {
             for (let file of testFiles) {
                 index.forEach((test) => {
@@ -188,9 +212,12 @@ export class TavernTestManager {
             index = await this.loadTestFiles(testFiles);
         }
 
-        if (existsSync(TavernTestManager.TAVERN_JUNIT_FILE_PATH)) {
-            let junitResults = await this.loadTestResultsFromJunit(
-                TavernTestManager.TAVERN_JUNIT_FILE_PATH);
+        // Load the cache
+        this._testsCache = await this.loadTestsCache();
+
+        // Load the JUnit file and match the results
+        if (existsSync(this._testsMainJunitFile)) {
+            let junitResults = await this.loadTestResultsFromJunit(this._testsMainJunitFile);
 
             return this.matchTestResults(index, junitResults);
         } else {
@@ -237,6 +264,13 @@ export class TavernTestManager {
         }
 
         return tests;
+    }
+
+    private async loadTestsCache(): Promise<TavernTestCache> {
+        const cache = await TavernTestCache.fromFile(
+            `${this._testsResultsPath}/tests_cache.json`);
+
+        return cache ?? new TavernTestCache();
     }
 
     private matchTestResults(
@@ -324,10 +358,10 @@ export class TavernTestManager {
         let args: string[] = [];
 
         if (test !== undefined) {
-            junitFile = `${TavernTestManager.TEST_RESULTS_PATH}/${this.hashTest(test)}`;
+            junitFile = `${this._testsResultsPath}/${this.generateHash(test)}`;
             args = [`"${test.nodeId}"`, `--junit-xml=${junitFile}`];
         } else {
-            junitFile = TavernTestManager.TAVERN_JUNIT_FILE_PATH;
+            junitFile = this._testsMainJunitFile;
             args = [this.testsPath, `--junit-xml=${junitFile}`];
         }
 
@@ -354,9 +388,11 @@ export class TavernTestManager {
         return this.matchTestResults(this._testsIndex, await this.loadTestResultsFromJunit(junitFile));
     }
 
-    private hashTest(test: TavernTest): string {
+    private generateHash(path: string): string;
+    private generateHash(test: TavernTest): string;
+    private generateHash(obj: string | TavernTest): string {
         const hash = createHash('md5');
-        hash.update(test.nodeId);
+        hash.update(obj instanceof TavernTest ? obj.nodeId : obj);
 
         return hash.digest('hex');
     }
