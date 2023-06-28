@@ -44,7 +44,7 @@ export class TavernTest {
     fileLine: number = 1;
     // private globalVariables = new Map<string, any>();
     private _nodeId: string; // pytest's nodeId. The ID usually has the format <filename>::<testname>.
-    public _parentTest?: TavernTest = undefined;
+    public _parentTest: TavernTest | undefined = undefined;
     // private otherMarks: string[] = [];
     private _childrenTests = new Map<string, TavernTest>();
     private _result: TavernTestResult;
@@ -82,9 +82,9 @@ export class TavernTest {
         return this._parentTest;
     }
 
-    set parentTest(test: TavernTest) {
+    set parentTest(test: TavernTest | undefined) {
         this._parentTest = test;
-        if (this.type === TavernTestType.ParameterTest) {
+        if (this._parentTest !== undefined && this.type === TavernTestType.ParameterTest) {
             this._nodeId = `${this.fileName}::${this._parentTest.name}[${this.name}]`;
         }
     }

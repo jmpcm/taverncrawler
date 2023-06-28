@@ -13,13 +13,13 @@ suite('TavernTest suite', () => {
   // });
 
   test('Intantiate TavernTest', () => {
-    let test = new TavernTest("test00", TavernTestType.File, "test00.file");
-    test.result = {
+    let tavernTest = new TavernTest("test00", TavernTestType.File, "test00.file");
+    tavernTest.result = {
       name: '',
       failure: '',
       state: TavernTestState.Pass
     };
 
-    assert.strictEqual(test.result.state, TavernTestState.Pass);
+    assert.strictEqual(tavernTest.result.state, TavernTestState.Pass);
   });
 });
