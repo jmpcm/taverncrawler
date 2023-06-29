@@ -1,29 +1,28 @@
 import * as vscode from 'vscode';
-import { TavernTrackerProvider } from './tavernTrackerProvider';
+import { TavernCrawlerProvider } from './tavernCrawlerProvider';
 
 
 export async function activate(context: vscode.ExtensionContext) {
   // const rootPath = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
   //   ? vscode.workspace.workspaceFolders[0].uri.fsPath
   //   : "undefined";
-  const tavernTrackerProvider = new TavernTrackerProvider(context);//rootPath);
+  const tavernCrawlerProvider = new TavernCrawlerProvider(context);//rootPath);
 
-  // vscode.window.registerTreeDataProvider('taverntracker', tavernTrackerProvider);
-  vscode.window.createTreeView('taverntracker', { treeDataProvider: tavernTrackerProvider });
-  await tavernTrackerProvider.refresh();
+  vscode.window.createTreeView('taverncrawler', { treeDataProvider: tavernCrawlerProvider });
+  await tavernCrawlerProvider.refresh();
 
-  vscode.commands.registerCommand('taverntracker.goToTest', (item) =>
-    tavernTrackerProvider.goToTest(item));
-  vscode.commands.registerCommand('taverntracker.runTest', (item) =>
-    tavernTrackerProvider.runTest(item));
-  vscode.commands.registerCommand('taverntracker.refresh', () =>
-    tavernTrackerProvider.refresh());
-  vscode.commands.registerCommand('taverntracker.runTests', () =>
-    tavernTrackerProvider.runAllTests());
+  vscode.commands.registerCommand('taverncrawler.goToTest', (item) =>
+    tavernCrawlerProvider.goToTest(item));
+  vscode.commands.registerCommand('taverncrawler.runTest', (item) =>
+    tavernCrawlerProvider.runTest(item));
+  vscode.commands.registerCommand('taverncrawler.refresh', () =>
+    tavernCrawlerProvider.refresh());
+  vscode.commands.registerCommand('taverncrawler.runTests', () =>
+    tavernCrawlerProvider.runAllTests());
 
   // Use the console to output diagnostic information (console.log) and errors (console.error)
   // This line of code will only be executed once when your extension is activated
-  console.log('Tavern Tracker is now active!');
+  console.log('Tavern Crawler is now active!');
 }
 
 // This method is called when your extension is deactivated

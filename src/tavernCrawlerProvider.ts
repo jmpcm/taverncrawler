@@ -31,7 +31,7 @@ const testStatIcons: Record<TavernTestState, ThemeIcon> = {
     [TavernTestState.Pass]: new ThemeIcon('pass', new ThemeColor('testing.iconPassed')),
     [TavernTestState.Running]: new ThemeIcon('loading~spin'),
     [TavernTestState.Skipped]: new ThemeIcon('remote-explorer-review-issues',
-        new ThemeColor('tavernTracker.test.skipped.icon')),
+        new ThemeColor('tavernCrawler.test.skipped.icon')),
     [TavernTestState.Unset]: new ThemeIcon('circle-large-outline',
         new ThemeColor('testing.iconUnset'))
 };
@@ -71,10 +71,10 @@ class DecorationsMap {
             case TavernTestState.Skipped:
                 return window.createTextEditorDecorationType(
                     {
-                        backgroundColor: new ThemeColor('tavernTracker.test.skipped.backgroundColor'),
+                        backgroundColor: new ThemeColor('tavernCrawler.test.skipped.backgroundColor'),
                         border: 'solid',
                         borderWidth: '1px',
-                        borderColor: new ThemeColor('tavernTracker.test.skipped.border'),
+                        borderColor: new ThemeColor('tavernCrawler.test.skipped.border'),
                         gutterIconPath: join(__filename, "..", "..", "resources", "dark", "skipped.svg"),
                         gutterIconSize: 'contain',
                         isWholeLine: true,
@@ -127,7 +127,7 @@ class DecorationsMap {
     }
 }
 
-export class TavernTrackerProvider implements TreeDataProvider<TavernTestTreeItem> {
+export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeItem> {
     // This structure stores the file name (string) and a set witl all the file lines (number) that 
     // have been decorated. This way, when its time to decide if the line must be decorated, this 
     // structure can be used to do this assertion.
