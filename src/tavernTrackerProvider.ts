@@ -1,5 +1,7 @@
 import { basename, join } from 'path';
 import {
+    DecorationOptions,
+    DecorationRangeBehavior,
     Event,
     EventEmitter,
     ExtensionContext,
@@ -7,6 +9,9 @@ import {
     Position,
     ProviderResult,
     Range,
+    TextDocument,
+    TextEditor,
+    TextEditorDecorationType,
     TextEditorRevealType,
     ThemeColor,
     ThemeIcon,
@@ -15,12 +20,7 @@ import {
     TreeItemCollapsibleState,
     Uri,
     window,
-    workspace,
-    DecorationRangeBehavior,
-    DecorationOptions,
-    TextEditorDecorationType,
-    TextEditor,
-    TextDocument
+    workspace
 } from 'vscode';
 import { TavernTestManager } from './tavernTestManager';
 import { TavernTest, TavernTestState, TavernTestType } from './tavernTest';
@@ -264,6 +264,11 @@ export class TavernTrackerProvider implements TreeDataProvider<TavernTestTreeIte
 
         let tests = await this._testsManager.runTest();
 
+        if (tests === undefined) {
+            // TODO write to console the error
+            return;
+        }
+
         // Repopulate the tree
         this._treeNodes.length = 0;
         for (let test of tests.filter(TavernTestType.File)) {
@@ -309,7 +314,6 @@ export class TavernTrackerProvider implements TreeDataProvider<TavernTestTreeIte
 class TavernTestTreeItem extends TreeItem {
     children: TavernTestTreeItem[] = [];
     readonly contextValue: string;
-    private _decorationOptions: DecorationOptions | undefined = undefined;
 
     constructor(
         public readonly test: TavernTest,
@@ -326,8 +330,6 @@ class TavernTestTreeItem extends TreeItem {
         this.contextValue = test.type !== TavernTestType.ParameterTest
             ? 'tavernTestTreeItem'
             : 'tavernTestTreeItemNoIcons';
-
-        this._decorationOptions = this.updateDecorationOptions();
     }
 
     addChildren(tests: TavernTest[]): void {
@@ -347,10 +349,6 @@ class TavernTestTreeItem extends TreeItem {
     }
 
     get decorationOptions(): DecorationOptions | undefined {
-        return this._decorationOptions;
-    }
-
-    private updateDecorationOptions(): DecorationOptions {
         const hoverMessage =
             this.test.type === TavernTestType.File || this.test.result.state === TavernTestState.Pass
                 ? undefined

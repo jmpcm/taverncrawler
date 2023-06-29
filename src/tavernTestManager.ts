@@ -1,14 +1,14 @@
 import { spawn } from 'child_process';
+import { EventEmitter, once } from 'events';
 import { XMLParser } from 'fast-xml-parser';
 import { existsSync, mkdirSync, readFile } from 'fs';
 import { createHash } from 'node:crypto';
-import { platform } from 'node:process';
-import { homedir } from 'os';
 import { basename, dirname, join } from 'path';
 import { promisify } from 'util';
 import { LineCounter, parseAllDocuments } from 'yaml';
 import { TavernTest, TavernTestType, TavernTestResult, TavernTestState } from './tavernTest';
 import { TavernTestCache } from './tavernTestCache';
+import { getExtensionCacheDirectory, getPytestPath } from './tavernCrawlerCommon';
 import { TavernTestIndex } from './tavernTestIndex';
 
 
@@ -56,30 +56,23 @@ function isSameTest(line: Buffer, testName: string): boolean {
 
 
 export class TavernTestManager {
+    private _extensionCacheDirectory: string;
     private _testsCache: TavernTestCache | undefined = undefined;
     private _testsIndex = new TavernTestIndex();
     private _testsMainJunitFile: string;
-    private _testsResultsPath: string = '/var/tmp/tavern-crawler';
-    private _testsWorkspaceId: string;
+    private _workspaceId: string;
+    private _workspaceCacheDirectory: string;
     private globalVariables = new Map<string, Map<string, any>>();
 
     constructor(readonly testsPath: string) {
         this.testsPath = testsPath;
+        this._extensionCacheDirectory = getExtensionCacheDirectory();
+        this._workspaceId = this.generateHash(this.testsPath);
+        this._workspaceCacheDirectory = join(this._extensionCacheDirectory, this._workspaceId);
+        this._testsMainJunitFile = join(this._workspaceCacheDirectory, this._workspaceId);
 
-        if (platform === 'darwin') {
-            this._testsResultsPath = `${homedir()}/Library/Caches/tavern-crawler`;
-        } else if (platform === 'linux' || platform === 'openbsd' || platform === 'freebsd') {
-            this._testsResultsPath = `${homedir()}/.tavern-crawler`;
-        } else if (platform === 'win32') {
-            this._testsResultsPath = `${process.env.APPDATA}/tavern-crawler`;
-        }
-
-        this._testsWorkspaceId = this.generateHash(this.testsPath);
-        this._testsResultsPath = join(this._testsResultsPath, this._testsWorkspaceId);
-        this._testsMainJunitFile = join(this._testsResultsPath, this._testsWorkspaceId);
-
-        if (!existsSync(this._testsResultsPath)) {
-            mkdirSync(this._testsResultsPath);
+        if (!existsSync(this._extensionCacheDirectory)) {
+            mkdirSync(this._extensionCacheDirectory, { recursive: true });
         }
     }
 
@@ -246,7 +239,11 @@ export class TavernTestManager {
             let failure: string | undefined = undefined;
             let state: TavernTestState = TavernTestState.Pass;
 
-            if ('failure' in testcase) {
+            if (testcase === undefined) {
+                // If there aren't any testcases, then don't do anything, because nothing concrete 
+                // can be assessed. This could be, for exmaple, the reuslt of not running the test.
+                continue;
+            } else if ('failure' in testcase) {
                 failure = testcase.failure['#text'];
                 state = TavernTestState.Fail;
             } else if ('skipped' in testcase) {
@@ -268,7 +265,7 @@ export class TavernTestManager {
 
     private async loadTestsCache(): Promise<TavernTestCache> {
         const cache = await TavernTestCache.fromFile(
-            `${this._testsResultsPath}/tests_cache.json`);
+            `${this._workspaceCacheDirectory}/tests_cache.json`);
 
         return cache ?? new TavernTestCache();
     }
@@ -347,26 +344,31 @@ export class TavernTestManager {
      * @param test 
      * @returns 
      */
-    async runTest(test?: TavernTest): Promise<TavernTestIndex> {
+    async runTest(test?: TavernTest): Promise<TavernTestIndex | undefined> {
         let pythonPath = 'PYTHONPATH' in process.env
             ? `${process.env.PYTHONPATH}:${this.testsPath}`
             : this.testsPath;
         // eslint-disable-next-line @typescript-eslint/naming-convention
         let env = Object.assign(process.env, { 'PYTHONPATH': pythonPath });
 
-        let junitFile = '';
+        let junitFile: string = '';
         let args: string[] = [];
 
         if (test !== undefined) {
-            junitFile = `${this._testsResultsPath}/${this.generateHash(test)}`;
+            junitFile = `${this._workspaceCacheDirectory}/${this.generateHash(test)}`;
             args = [`"${test.nodeId}"`, `--junit-xml=${junitFile}`];
         } else {
             junitFile = this._testsMainJunitFile;
             args = [this.testsPath, `--junit-xml=${junitFile}`];
         }
 
+        let pytestPath = getPytestPath();
+        if (pytestPath === undefined) {
+            throw new Error('Could not find pytest. Please verify that it is installed.');
+        }
+
         let tavernci = spawn(
-            '/usr/local/bin/pytest',
+            pytestPath,
             args,
             {
                 cwd: this.testsPath,
@@ -385,7 +387,18 @@ export class TavernTestManager {
             error += chunk;
         }
 
-        return this.matchTestResults(this._testsIndex, await this.loadTestResultsFromJunit(junitFile));
+        let tavernciFinished = new EventEmitter();
+        tavernci.on('close', async () => {
+            tavernciFinished.emit('tavernci_finished');
+        });
+
+        // Wait for the spawned process to finish. This voids that the junitFile is not found, which
+        // could happen since spawn() runs asynchronously.
+        await once(tavernciFinished, 'tavernci_finished');
+
+        return this.matchTestResults(
+            this._testsIndex,
+            await this.loadTestResultsFromJunit(junitFile));
     }
 
     private generateHash(path: string): string;

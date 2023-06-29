@@ -1,5 +1,5 @@
 {
-    "name": "Tavern Crawler",
+    "name": "tavern-crawler",
     "displayName": "Tavern Crawler",
     "description": "",
     "version": "0.0.1",
@@ -17,14 +17,14 @@
         "viewsContainers": {
             "activitybar": [
                 {
-                    "id": "taverntracker-container",
-                    "title": "Tavern Tracker",
+                    "id": "taverncrawler-container",
+                    "title": "Tavern Crawler",
                     "icon": "resources/icon.png"
                 }
             ]
         },
         "views": {
-            "taverntracker-container": [
+            "taverncrawler-container": [
                 {
                     "id": "taverntracker",
                     "name": "Tests"
@@ -152,13 +152,12 @@
         "esbuild": "^0.18.10",
         "eslint": "^8.39.0",
         "glob": "^8.1.0",
-        "jest": "^26.6.3",
         "mocha": "^10.2.0",
-        "ts-jest": "^27.0.3",
         "typescript": "^5.0.4"
     },
     "dependencies": {
         "fast-xml-parser": "^4.2.2",
+        "which": "^3.0.1",
         "yaml": "^2.2.2"
     }
 }
