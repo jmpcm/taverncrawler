@@ -1,28 +1,71 @@
-import { existsSync, readFile } from 'fs';
+import { existsSync, readFile, writeFile } from 'fs';
 import { promisify } from 'util';
-import { TavernTest, TavernTestResult } from './tavernTest';
+import { getCachedState, TavernTest, TavernTestResult } from './tavernTest';
 
 
 export class TavernTestCache extends Map<string, TavernTestResult> {
-    constructor(json?: string) {
-        super(json ? JSON.parse(json) : undefined);
+    private _cacheLoaded: boolean = false;
+    private _savingToFile: boolean = false;
+
+    constructor(public filePath: string) {
+        super();
+        this.filePath = filePath;
     }
 
     getResult(test: TavernTest): TavernTestResult | undefined;
     getResult(nodeId: string): TavernTestResult | undefined;
     getResult(testOrNodeId: string | TavernTest): TavernTestResult | undefined {
-        return this.get(testOrNodeId instanceof TavernTest ? testOrNodeId.nodeId : testOrNodeId);
+        let result = this.get(testOrNodeId instanceof TavernTest
+            ? testOrNodeId.nodeId
+            : testOrNodeId);
+
+        if (result === undefined) {
+            return result;
+        }
+
+        result.state = getCachedState(result.state);
+
+        return result;
     }
 
-    static async fromFile(filePath: string): Promise<TavernTestCache | undefined> {
-        if (!existsSync(filePath)) {
-            return undefined;
+    async load(filePath?: string, reload: boolean = false): Promise<void> {
+        if (this._cacheLoaded && !reload) {
+            return;
+        }
+
+        if (filePath === undefined && reload) {
+            throw new Error('A filePath was not specified. Nothing was reloaded.');
+        }
+
+        const filetoLoad = filePath ?? this.filePath;
+        this.filePath = filetoLoad;
+
+        if (!existsSync(filetoLoad)) {
+            throw new Error(`The file ${filePath} does not exist. Nothing was loaded.`);
         }
 
         const readFileAsync = promisify(readFile);
-        const fileContent = await readFileAsync(filePath, 'utf-8');
+        const fileContent = await readFileAsync(filetoLoad, 'utf-8');
 
-        return new this(fileContent);
+        this.clear();
+
+        for (const result of Object.entries(JSON.parse(fileContent))) {
+            this.set(result[0], result[1] as TavernTestResult);
+        }
+
+        this._cacheLoaded = true;
+    }
+
+    async save(filePath?: string): Promise<void> {
+        if (this._savingToFile
+            || (this.filePath === undefined && filePath === undefined)) {
+            return;
+        }
+        this._savingToFile = true;
+
+        let file: string = (filePath ?? this.filePath)!;
+
+        writeFile(file, await this.toJson(), 'utf8', () => { this._savingToFile = false; });
     }
 
     setResult(test: TavernTest | TavernTest[]): void {
@@ -38,6 +81,6 @@ export class TavernTestCache extends Map<string, TavernTestResult> {
     }
 
     async toJson(): Promise<string> {
-        return JSON.stringify(this);
+        return JSON.stringify(Object.fromEntries(this));
     }
 }

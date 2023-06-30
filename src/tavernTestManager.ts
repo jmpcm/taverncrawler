@@ -43,8 +43,8 @@ function isSameTest(line: Buffer, testName: string): boolean {
                 j += 1;
                 i -= 1;
                 // The current character in the testName is invalid (most likely a space). Therefore,
-                // skip the character of testName, but don't skip the character of the buffer, as this
-                // still has to be compared with the testName.
+                // skip the character of testName, but don't skip the character of the buffer, as
+                // this still has to be compared with the testName.
             } else if (!invalidCharLine && invalidCharTestName) {
                 i += 1;
             }
@@ -57,7 +57,8 @@ function isSameTest(line: Buffer, testName: string): boolean {
 
 export class TavernTestManager {
     private _extensionCacheDirectory: string;
-    private _testsCache: TavernTestCache | undefined = undefined;
+    private _testsCache: TavernTestCache;
+    private _testsCacheFile: string;
     private _testsIndex = new TavernTestIndex();
     private _testsMainJunitFile: string;
     private _workspaceId: string;
@@ -70,6 +71,8 @@ export class TavernTestManager {
         this._workspaceId = this.generateHash(this.testsPath);
         this._workspaceCacheDirectory = join(this._extensionCacheDirectory, this._workspaceId);
         this._testsMainJunitFile = join(this._workspaceCacheDirectory, this._workspaceId);
+        this._testsCacheFile = join(this._workspaceCacheDirectory, `${this._workspaceId}.cache`);
+        this._testsCache = new TavernTestCache(this._testsCacheFile);
 
         if (!existsSync(this._extensionCacheDirectory)) {
             mkdirSync(this._extensionCacheDirectory, { recursive: true });
@@ -206,16 +209,9 @@ export class TavernTestManager {
         }
 
         // Load the cache
-        this._testsCache = await this.loadTestsCache();
+        await this._testsCache.load();
 
-        // Load the JUnit file and match the results
-        if (existsSync(this._testsMainJunitFile)) {
-            let junitResults = await this.loadTestResultsFromJunit(this._testsMainJunitFile);
-
-            return this.matchTestResults(index, junitResults);
-        } else {
-            return index;
-        }
+        return this.matchTestResults(index, this._testsCache);
     }
 
     private async loadTestResultsFromJunit(resultsFile: string): Promise<Map<string, TavernTestResult>> {
@@ -263,39 +259,37 @@ export class TavernTestManager {
         return tests;
     }
 
-    private async loadTestsCache(): Promise<TavernTestCache> {
-        const cache = await TavernTestCache.fromFile(
-            `${this._workspaceCacheDirectory}/tests_cache.json`);
-
-        return cache ?? new TavernTestCache();
-    }
-
     private matchTestResults(
-        tavernTests: TavernTestIndex,
-        junitResults: Map<string, TavernTestResult>): TavernTestIndex {
+        testsIndex: TavernTestIndex,
+        testsCache: TavernTestCache,
+        junitResults?: Map<string, TavernTestResult>): TavernTestIndex {
 
-        for (let [testId, testJunitResult] of junitResults) {
-            let test = tavernTests.getTest(testId);
+        for (let [nodeId, test] of testsIndex) {
+            let testResult = junitResults?.get(nodeId) ?? testsCache.getResult(nodeId);
 
-            if (test === undefined) {
+            if (testResult === undefined) {
                 continue;
             }
 
-            test.result = testJunitResult;
+            test.result = testResult;
 
             // Set the results for the parameter tests.
             if (test.type === TavernTestType.Test && test.childrenTests.length > 0) {
                 for (let paramTest of test.childrenTests) {
-                    let paramTestJunitResult = junitResults.get(`${test.name}[${paramTest.name}]`);
+                    let paramTestJunitResult =
+                        junitResults?.get(`${test.name}[${paramTest.name}]`)
+                        ?? testsCache.getResult(paramTest);
 
                     if (paramTestJunitResult !== undefined) {
                         paramTest.result = paramTestJunitResult;
                     }
                 }
             }
+
+            this._testsCache?.setResult(test);
         }
 
-        return tavernTests;
+        return testsIndex;
     }
 
     private async resolveGlobalVariables(variables: string[] | any[][], files: string[]): Promise<string[]> {
@@ -396,9 +390,14 @@ export class TavernTestManager {
         // could happen since spawn() runs asynchronously.
         await once(tavernciFinished, 'tavernci_finished');
 
-        return this.matchTestResults(
+        let index = this.matchTestResults(
             this._testsIndex,
+            this._testsCache,
             await this.loadTestResultsFromJunit(junitFile));
+
+        await this._testsCache?.save();
+
+        return index;
     }
 
     private generateHash(path: string): string;

@@ -27,13 +27,20 @@ import { TavernTest, TavernTestState, TavernTestType } from './tavernTest';
 
 
 const testStatIcons: Record<TavernTestState, ThemeIcon> = {
-    [TavernTestState.Fail]: new ThemeIcon('error', new ThemeColor('testing.iconFailed')),
-    [TavernTestState.Pass]: new ThemeIcon('pass', new ThemeColor('testing.iconPassed')),
+    [TavernTestState.Fail]: new ThemeIcon('error',
+        new ThemeColor('testing.iconFailed')),
+    [TavernTestState.Pass]: new ThemeIcon('pass',
+        new ThemeColor('testing.iconPassed')),
     [TavernTestState.Running]: new ThemeIcon('loading~spin'),
     [TavernTestState.Skipped]: new ThemeIcon('remote-explorer-review-issues',
         new ThemeColor('tavernCrawler.test.skipped.icon')),
     [TavernTestState.Unset]: new ThemeIcon('circle-large-outline',
-        new ThemeColor('testing.iconUnset'))
+        new ThemeColor('testing.iconUnset')),
+    [TavernTestState.FailCached]: new ThemeIcon('error',
+        new ThemeColor('testing.iconUnset')),
+    [TavernTestState.SkippedCached]: new ThemeIcon('remote-explorer-review-issues',
+        new ThemeColor('testing.iconUnset')),
+    [TavernTestState.PassCached]: new ThemeIcon('pass', new ThemeColor('testing.iconUnset'))
 };
 
 function applyIconToTreeItems(items: TavernTestTreeItem[], icon?: ThemeIcon): void {

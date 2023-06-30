@@ -13,13 +13,25 @@ export enum TavernTestType {
 
 
 export enum TavernTestState {
-    Fail = 10,
-    Skipped = 7, // This state can occur when the test is marked as xfail, skip or skipif
-    Unset = 5,
-    Pass = 3,
-    Running = 1
+    Fail = 0x80,
+    Skipped = 0x40,// This state can occur when the test is marked as xfail, skip or skipif
+    Unset = 0x20,
+    Pass = 0x10,
+    FailCached = Fail >> 4,
+    SkippedCached = Skipped >> 4,
+    PassCached = Pass >> 4,
+    Running = 0
 }
 
+export function getCachedState(state: TavernTestState): TavernTestState {
+    if (state === TavernTestState.Unset
+        || state === TavernTestState.Running
+        || state < TavernTestState.Pass) {
+        return state;
+    }
+
+    return state >> 4;
+}
 
 export interface TavernTestResult {
     failure: string | undefined;
