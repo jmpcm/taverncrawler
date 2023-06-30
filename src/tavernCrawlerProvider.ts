@@ -9,6 +9,7 @@ import {
     Position,
     ProviderResult,
     Range,
+    Selection,
     TextDocument,
     TextEditor,
     TextEditorDecorationType,
@@ -230,7 +231,12 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
             this.decoratorsMap.setDecoration(editor, item);
         }
 
-        editor.revealRange(new Range(startPos, endPos), TextEditorRevealType.InCenter);
+        editor.revealRange(
+            new Range(startPos, endPos),
+            TextEditorRevealType.InCenterIfOutsideViewport);
+
+        // Move the cursor to the beginning of the test line.
+        editor.selection = new Selection(startPos, startPos);
     }
 
     async refresh() {
