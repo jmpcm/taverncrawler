@@ -193,6 +193,44 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
             }
         });
 
+        /**
+         * TODO this code works, i.e. if the file is renamed, the tree displays the renamed file.
+         *      But some things still need to be addressed:
+         *      1. the cache still has the test results of the "previous file". Shall these results 
+         *         be removed or kept, which is useful if the file is reanmed to the previous name?
+         *      2. only reload the renamed file, instead of reloading the full cache, and delete
+         *         the previous file from cache (see 1). Consider a testManager.updateTestResults()
+         *      3. check if it is needed to remove the files from the testIndex.
+         * 
+         *      Plan: remove discoverTavernTestFiles(), because the files that changed are given in
+         *      the event. Evaluate if it i swroth it to add testManager.updateTestResults() and/or
+         *      testManager.removeFile() (see 2).
+         *      Finally, consider refactor testManager's methdos names and add the above methods.
+         */
+        workspace.onDidRenameFiles(async (event) => {
+            const testFiles = await this.discoverTavernTestFiles();
+            const tests = await this._testsManager.loadTestResults(
+                Array.from(testFiles.values()).map(t => t.fsPath));
+            const renamedFile = basename(event.files[0].oldUri.fsPath);
+
+            tests.forEach((test, nodeId) => {
+                if (test.fileName === renamedFile) {
+                    tests.delete(nodeId);
+                }
+            });
+
+            // Repopulate the tree when the document is saved, so that if there changes in the
+            // number of tests, thiese are reflected in the tree.
+            this._treeNodes.length = 0;
+            for (let test of tests.filter(TavernTestType.File)) {
+                let treeItem = new TavernTestTreeItem(test);
+                treeItem.addChildren(test.childrenTests);
+
+                this._treeNodes.push(treeItem);
+            }
+            this._onDidChangeTreeData.fire(undefined);
+        });
+
         workspace.onDidSaveTextDocument(async (document: TextDocument) => {
             const tests = await this._testsManager.loadTestResults([document.uri.fsPath]);
 
@@ -279,7 +317,6 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
 
         const testFiles = await this.discoverTavernTestFiles();
         await this._testsManager.loadTestFiles(Array.from(testFiles.values()).map(t => t.fsPath));
-
         let tests = await this._testsManager.loadTestResults();
 
         for (let test of tests.filter(TavernTestType.File)) {
