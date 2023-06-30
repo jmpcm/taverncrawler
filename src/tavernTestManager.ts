@@ -353,7 +353,7 @@ export class TavernTestManager {
             args = [`"${test.nodeId}"`, `--junit-xml=${junitFile}`];
         } else {
             junitFile = this._testsMainJunitFile;
-            args = [this.testsPath, `--junit-xml=${junitFile}`];
+            args = [this.testsPath, '-n', 'auto', `--junit-xml=${junitFile}`];
         }
 
         let pytestPath = getPytestPath();
