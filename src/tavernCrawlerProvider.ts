@@ -71,7 +71,18 @@ class DecorationsMap {
                         borderWidth: '1px',
                         borderColor: new ThemeColor('testing.peekBorder'),
                         gutterIconPath: join(__filename, "..", "..", "resources", "dark", "fail.svg"),
-                        gutterIconSize: 'contain',
+                        gutterIconSize: '90%',
+                        isWholeLine: true,
+                        overviewRulerColor: new ThemeColor('testing.message.error.lineBackground'),
+                        rangeBehavior: DecorationRangeBehavior.ClosedOpen
+                    });
+            case TavernTestState.FailCached:
+                return window.createTextEditorDecorationType(
+                    {
+                        backgroundColor: undefined,
+                        border: undefined,
+                        gutterIconPath: join(__filename, "..", "..", "resources", "dark", "fail-cached.svg"),
+                        gutterIconSize: '90%',
                         isWholeLine: true,
                         overviewRulerColor: new ThemeColor('testing.message.error.lineBackground'),
                         rangeBehavior: DecorationRangeBehavior.ClosedOpen
@@ -84,7 +95,18 @@ class DecorationsMap {
                         borderWidth: '1px',
                         borderColor: new ThemeColor('tavernCrawler.test.skipped.border'),
                         gutterIconPath: join(__filename, "..", "..", "resources", "dark", "skipped.svg"),
-                        gutterIconSize: 'contain',
+                        gutterIconSize: '90%',
+                        isWholeLine: true,
+                        overviewRulerColor: "#fbc02d80",
+                        rangeBehavior: DecorationRangeBehavior.ClosedOpen,
+                    });
+            case TavernTestState.SkippedCached:
+                return window.createTextEditorDecorationType(
+                    {
+                        backgroundColor: undefined,
+                        border: undefined,
+                        gutterIconPath: join(__filename, "..", "..", "resources", "dark", "skipped-cached.svg"),
+                        gutterIconSize: '90%',
                         isWholeLine: true,
                         overviewRulerColor: "#fbc02d80",
                         rangeBehavior: DecorationRangeBehavior.ClosedOpen,
@@ -95,7 +117,17 @@ class DecorationsMap {
                         backgroundColor: undefined,
                         border: undefined,
                         gutterIconPath: join(__filename, "..", "..", "resources", "dark", "pass.svg"),
-                        gutterIconSize: 'contain',
+                        gutterIconSize: '90%',
+                        overviewRulerColor: new ThemeColor('testing.iconPassed'),
+                        rangeBehavior: DecorationRangeBehavior.ClosedOpen
+                    });
+            case TavernTestState.PassCached:
+                return window.createTextEditorDecorationType(
+                    {
+                        backgroundColor: undefined,
+                        border: undefined,
+                        gutterIconPath: join(__filename, "..", "..", "resources", "dark", "pass-cached.svg"),
+                        gutterIconSize: '90%',
                         overviewRulerColor: new ThemeColor('testing.iconPassed'),
                         rangeBehavior: DecorationRangeBehavior.ClosedOpen
                     });
@@ -106,7 +138,7 @@ class DecorationsMap {
                         backgroundColor: undefined,
                         border: undefined,
                         gutterIconPath: join(__filename, "..", "..", "resources", "light", "undefined.svg"),
-                        gutterIconSize: 'contain',
+                        gutterIconSize: '90%',
                         overviewRulerColor: new ThemeColor('testing.iconUnset'),
                         rangeBehavior: DecorationRangeBehavior.ClosedOpen
                     });
