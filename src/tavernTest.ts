@@ -62,6 +62,7 @@ export class TavernTest {
     private _result: TavernTestResult;
     private _stages: TavernTestStage[] = [];
     // private _parameters: string[] = [];
+    private _childrenTestsPassCount: number = 0;
 
     constructor(
         readonly name: string,
@@ -84,6 +85,10 @@ export class TavernTest {
 
     get childrenTests(): TavernTest[] {
         return Array.from(this._childrenTests.values());
+    }
+
+    get childrenTestsPassCount(): number {
+        return this._childrenTestsPassCount;
     }
 
     get nodeId(): string {
@@ -219,6 +224,7 @@ export class TavernTest {
         }
 
         let state = childrenToEvaluate.at(0)?.result.state ?? TavernTest.DEFAULT_STATE;
+        this._childrenTestsPassCount = 0;
 
         for (const child of childrenToEvaluate) {
             if (child._childrenTests.size > 0) {
@@ -226,6 +232,7 @@ export class TavernTest {
             }
 
             state = state <= child.result.state ? child.result.state : state;
+            this._childrenTestsPassCount += child.result.state === TavernTestState.Pass ? 1 : 0;
         }
 
         return state;

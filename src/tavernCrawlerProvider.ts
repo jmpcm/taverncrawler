@@ -196,7 +196,8 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         workspace.onDidSaveTextDocument(async (document: TextDocument) => {
             const tests = await this._testsManager.loadTestResults([document.uri.fsPath]);
 
-            // Repopulate the tree
+            // Repopulate the tree when the document is saved, so that if there changes in the
+            // number of tests, thiese are reflected in the tree.
             this._treeNodes.length = 0;
             for (let test of tests.filter(TavernTestType.File)) {
                 let treeItem = new TavernTestTreeItem(test);
@@ -336,6 +337,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         // Set the tree item's icon with the test's current state, update the state of each of the
         // children items and, finally, set the item's parent icon.
         item.iconPath = getIcon(item.test.result.state);
+        item.updateLabel();
         applyIconToTreeItems(item.children);
 
         if (item.parentTest !== undefined) {
@@ -365,7 +367,7 @@ class TavernTestTreeItem extends TreeItem {
         public readonly parentTest: TavernTestTreeItem | undefined = undefined) {
 
         super(
-            test.name,
+            TavernTestTreeItem.createLabel(test),
             test.type === TavernTestType.File
                 ? TreeItemCollapsibleState.Collapsed
                 : TreeItemCollapsibleState.None);
@@ -405,5 +407,15 @@ class TavernTestTreeItem extends TreeItem {
                 new Position(this.test.fileLine - 1, 1024)),
             hoverMessage: hoverMessage
         };
+    }
+
+    updateLabel(): void {
+        this.label = TavernTestTreeItem.createLabel(this.test);
+    }
+
+    private static createLabel(test: TavernTest): string {
+        return test.type === TavernTestType.File
+            ? `${test.name}    [${test.childrenTestsPassCount}/${test.childrenTests.length}]`
+            : test.name;
     }
 }
