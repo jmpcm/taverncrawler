@@ -5,6 +5,7 @@ import {
     Event,
     EventEmitter,
     ExtensionContext,
+    FileRenameEvent,
     MarkdownString,
     Position,
     ProviderResult,
@@ -23,8 +24,10 @@ import {
     window,
     workspace
 } from 'vscode';
+import { TAVERN_FILE_EXTENSION } from './tavernCrawlerCommon';
 import { TavernTestManager } from './tavernTestManager';
 import { TavernTest, TavernTestState, TavernTestType } from './tavernTest';
+import { TavernTestIndex } from './tavernTestIndex';
 
 
 const testStatIcons: Record<TavernTestState, ThemeIcon> = {
@@ -189,40 +192,28 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
 
         window.onDidChangeActiveTextEditor(async (editor) => {
             if (editor !== undefined) {
-                this.decorateFile(editor);
+                this._decorateFile(editor);
             }
         });
 
-        /**
-         * TODO this code works, i.e. if the file is renamed, the tree displays the renamed file.
-         *      But some things still need to be addressed:
-         *      1. the cache still has the test results of the "previous file". Shall these results 
-         *         be removed or kept, which is useful if the file is reanmed to the previous name?
-         *      2. only reload the renamed file, instead of reloading the full cache, and delete
-         *         the previous file from cache (see 1). Consider a testManager.updateTestResults()
-         *      3. check if it is needed to remove the files from the testIndex.
-         * 
-         *      Plan: remove discoverTavernTestFiles(), because the files that changed are given in
-         *      the event. Evaluate if it i swroth it to add testManager.updateTestResults() and/or
-         *      testManager.removeFile() (see 2).
-         *      Finally, consider refactor testManager's methdos names and add the above methods.
-         */
-        workspace.onDidRenameFiles(async (event) => {
-            const testFiles = await this.discoverTavernTestFiles();
-            const tests = await this._testsManager.loadTestResults(
-                Array.from(testFiles.values()).map(t => t.fsPath));
-            const renamedFile = basename(event.files[0].oldUri.fsPath);
+        workspace.onDidRenameFiles(async (event: FileRenameEvent) => {
+            if (event.files.length === 0) {
+                return;
+            }
 
-            tests.forEach((test, nodeId) => {
-                if (test.fileName === renamedFile) {
-                    tests.delete(nodeId);
-                }
-            });
+            const renamedFiles = event.files.filter(
+                fileRename => basename(fileRename.newUri.fsPath).endsWith(TAVERN_FILE_EXTENSION));
+            let tests: TavernTestIndex;
+
+            for (const file of renamedFiles) {
+                this._testsManager.deleteTestFiles([file.oldUri.fsPath]);
+                tests = await this._testsManager.loadTestFiles([file.newUri.fsPath]);
+            }
 
             // Repopulate the tree when the document is saved, so that if there changes in the
             // number of tests, thiese are reflected in the tree.
             this._treeNodes.length = 0;
-            for (let test of tests.filter(TavernTestType.File)) {
+            for (let test of tests!.filter(TavernTestType.File)) {
                 let treeItem = new TavernTestTreeItem(test);
                 treeItem.addChildren(test.childrenTests);
 
@@ -232,6 +223,12 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         });
 
         workspace.onDidSaveTextDocument(async (document: TextDocument) => {
+            const filename = basename(document.fileName);
+
+            if (!filename.endsWith(TAVERN_FILE_EXTENSION)) {
+                return;
+            }
+
             const tests = await this._testsManager.loadTestResults([document.uri.fsPath]);
 
             // Repopulate the tree when the document is saved, so that if there changes in the
@@ -247,7 +244,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         });
     }
 
-    private async decorateFile(editor: TextEditor): Promise<void> {
+    private async _decorateFile(editor: TextEditor): Promise<void> {
         let document = editor.document;
         let node = this._treeNodes.find(n => n.test.fileName === basename(document.fileName));
 
@@ -256,7 +253,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         }
     }
 
-    private async discoverTavernTestFiles(): Promise<Map<string, Uri>> {
+    private async _discoverTavernTestFiles(): Promise<Map<string, Uri>> {
         let files = await workspace.findFiles('**.tavern.yaml');
 
         return this._workspaceTavernFiles = new Map<string, Uri>(
@@ -294,7 +291,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
             startPos = new Position(0, 0);
             endPos = new Position(0, 0);
 
-            this.decorateFile(editor);
+            this._decorateFile(editor);
         } else {
             startPos = new Position(item.test.fileLine - 1, 0);
             endPos = new Position(item.test.fileLine - 1, 1024);
@@ -315,7 +312,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         // appear duplicated.
         this._treeNodes.length = 0;
 
-        const testFiles = await this.discoverTavernTestFiles();
+        const testFiles = await this._discoverTavernTestFiles();
         await this._testsManager.loadTestFiles(Array.from(testFiles.values()).map(t => t.fsPath));
         let tests = await this._testsManager.loadTestResults();
 
@@ -332,7 +329,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         if (focusedDocument !== undefined
             && tests.getTest(basename(focusedDocument.fileName)) !== undefined) {
             let editor = await window.showTextDocument(focusedDocument);
-            this.decorateFile(editor);
+            this._decorateFile(editor);
         }
 
         this._onDidChangeTreeData.fire(undefined);
@@ -342,7 +339,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         applyIconToTreeItems(this._treeNodes, getIcon(TavernTestState.Running));
         this._onDidChangeTreeData.fire(undefined);
 
-        const testFiles = await this.discoverTavernTestFiles();
+        const testFiles = await this._discoverTavernTestFiles();
         this._testsManager.loadTestFiles(Array.from(testFiles.values()).map(t => t.fsPath));
 
         let tests = await this._testsManager.runTest();
@@ -389,7 +386,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
 
         if (document !== undefined) {
             let editor = await window.showTextDocument(document);
-            this.decorateFile(editor);
+            this._decorateFile(editor);
         }
     }
 }

@@ -3,7 +3,9 @@ import { platform } from 'node:process';
 import { homedir } from 'os';
 
 
-const APP_NAME: string = 'tavern-crawler';
+export const APP_NAME: string = 'tavern-crawler';
+export const TAVERN_FILE_EXTENSION = '.tavern.yaml';
+
 let extensionCacheDirectory: string | undefined = undefined;
 let pytestPath: string | undefined = undefined;
 

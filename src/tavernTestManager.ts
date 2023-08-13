@@ -63,12 +63,12 @@ export class TavernTestManager {
     private _testsMainJunitFile: string;
     private _workspaceId: string;
     private _workspaceCacheDirectory: string;
-    private globalVariables = new Map<string, Map<string, any>>();
+    private _globalVariables = new Map<string, Map<string, any>>();
 
     constructor(readonly testsPath: string) {
         this.testsPath = testsPath;
         this._extensionCacheDirectory = getExtensionCacheDirectory();
-        this._workspaceId = this.generateHash(this.testsPath);
+        this._workspaceId = this._generateHash(this.testsPath);
         this._workspaceCacheDirectory = join(this._extensionCacheDirectory, this._workspaceId);
         this._testsMainJunitFile = join(this._workspaceCacheDirectory, this._workspaceId);
         this._testsCacheFile = join(this._workspaceCacheDirectory, `${this._workspaceId}.cache`);
@@ -79,11 +79,31 @@ export class TavernTestManager {
         }
     }
 
+    async deleteTestFiles(testFiles: string[]): Promise<TavernTestIndex> {
+        // Remove old file from index and cache
+        for (const file of testFiles) {
+            const testsToDelete = this._testsIndex.getTestsForFile(basename(file));
+            testsToDelete.forEach(t => this._testsCache.delete(t.nodeId));
+            this._testsIndex.deleteFile(file);
+        }
+
+        return this._testsIndex;
+    }
+
     async getTests(): Promise<TavernTestIndex | undefined> {
         return await this.runTest();
     }
 
-    private async loadGlobalConfigurationVariables(files: string[] | string | undefined): Promise<void> {
+    private _generateHash(path: string): string;
+    private _generateHash(test: TavernTest): string;
+    private _generateHash(obj: string | TavernTest): string {
+        const hash = createHash('md5');
+        hash.update(obj instanceof TavernTest ? obj.nodeId : obj);
+
+        return hash.digest('hex');
+    }
+
+    private async _loadGlobalConfigurationVariables(files: string[] | string | undefined): Promise<void> {
         if (files === undefined
             || files === ''
             || Array.isArray(files) && files.length === 0) {
@@ -94,7 +114,7 @@ export class TavernTestManager {
 
         for (const file of files) {
             // Don't reload the file if it is already loaded.
-            if (file in this.globalVariables) {
+            if (file in this._globalVariables) {
                 continue;
             }
 
@@ -111,24 +131,25 @@ export class TavernTestManager {
             });
 
             const fileName = basename(file);
-            if (fileName in this.globalVariables) {
+            if (fileName in this._globalVariables) {
                 for (const [k, v] of documentVariables) {
-                    this.globalVariables.get(fileName)?.set(k, v);
+                    this._globalVariables.get(fileName)?.set(k, v);
                 }
             } else {
-                this.globalVariables.set(fileName, documentVariables);
+                this._globalVariables.set(fileName, documentVariables);
             }
         }
     }
 
     async loadTestFiles(testFiles: string[]): Promise<TavernTestIndex> {
-        for (let file of testFiles) {
-            const readFileAsync = promisify(readFile);
+        const readFileAsync = promisify(readFile);
+
+        for (const file of testFiles) {
             const fileContent = await readFileAsync(file);
             const fileName = basename(file);
             const filePath = dirname(file);
 
-            // Parse the YAML documents
+            // Parse the YAML documents in the file
             let lineCounter = new LineCounter();
             let testDocuments = parseAllDocuments(
                 fileContent.toString(),
@@ -141,11 +162,11 @@ export class TavernTestManager {
                 const includeFiles = jsDocument.includes?.map(
                     (f: string) => join(filePath, f)) ?? undefined;
 
-                await this.loadGlobalConfigurationVariables(includeFiles);
+                await this._loadGlobalConfigurationVariables(includeFiles);
 
                 // Get the global variables that are referenced in this test.
                 let testGlobalVariables = new Map<string, Map<string, any>>();
-                this.globalVariables.forEach((v: Map<string, any>, f: string) => {
+                this._globalVariables.forEach((v: Map<string, any>, f: string) => {
                     if (f in includeFiles) {
                         testGlobalVariables.set(f, v);
                     }
@@ -175,7 +196,7 @@ export class TavernTestManager {
                     for (let mark of jsDocument.marks) {
                         if (typeof mark === 'object' && 'parametrize' in mark) {
                             test.addParameters(
-                                await this.resolveGlobalVariables(
+                                await this._resolveGlobalVariables(
                                     mark.parametrize.vals, includeFiles));
                         }
                     }
@@ -184,20 +205,20 @@ export class TavernTestManager {
                 return test;
             }));
 
-            this._testsIndex.setTest(tests);
+            this._testsIndex.addTest(tests);
         }
 
         return this._testsIndex;
     }
 
-    async loadTestResults(testFiles?: string[]): Promise<TavernTestIndex> {
+    async loadTestResults(resultFiles?: string[]): Promise<TavernTestIndex> {
         let index: TavernTestIndex = this._testsIndex;
 
         // Load the test files. If a file has been previously loaded, first delete the results from
         // the index an rebuild the index for the file. This avoids duplicate entries when calling 
         // loadTestFiles(), which doesn't look for (therefore, remove) duplicate entries. 
-        if (testFiles !== undefined) {
-            for (let file of testFiles) {
+        if (resultFiles !== undefined) {
+            for (const file of resultFiles) {
                 index.forEach((test) => {
                     if (test.nodeId.startsWith(basename(file))) {
                         index.delete(test.nodeId);
@@ -205,16 +226,16 @@ export class TavernTestManager {
                 });
             }
 
-            index = await this.loadTestFiles(testFiles);
+            index = await this.loadTestFiles(resultFiles);
         }
 
         // Load the cache
         await this._testsCache.load();
 
-        return this.matchTestResults(index, this._testsCache);
+        return this._matchTestResults(index, this._testsCache);
     }
 
-    private async loadTestResultsFromJunit(resultsFile: string): Promise<Map<string, TavernTestResult>> {
+    private async _loadTestResultsFromJunit(junitFile: string): Promise<Map<string, TavernTestResult>> {
         // Documentation for JUnit here:
         // https://www.ibm.com/docs/en/developer-for-zos/14.1?topic=formats-junit-xml-format
         const parser = new XMLParser({ ignoreAttributes: false });
@@ -222,7 +243,7 @@ export class TavernTestManager {
 
         // Read the JUnit file.
         const readFileAsync = promisify(readFile);
-        const fileContent = await readFileAsync(resultsFile, 'utf-8');
+        const fileContent = await readFileAsync(junitFile, 'utf-8');
         const xmlData = parser.parse(fileContent.toString());
 
         // Load the test results from the JUnit file. If only one test is executed, the result is a
@@ -259,7 +280,7 @@ export class TavernTestManager {
         return tests;
     }
 
-    private matchTestResults(
+    private _matchTestResults(
         testsIndex: TavernTestIndex,
         testsCache: TavernTestCache,
         junitResults?: Map<string, TavernTestResult>): TavernTestIndex {
@@ -292,12 +313,12 @@ export class TavernTestManager {
         return testsIndex;
     }
 
-    private async resolveGlobalVariables(variables: string[] | any[][], files: string[]): Promise<string[]> {
+    private async _resolveGlobalVariables(variables: string[] | any[][], files: string[]): Promise<string[]> {
         let resolvedVariables: any[] = [];
 
         for (const variable of variables) {
             if (Array.isArray(variable)) {
-                resolvedVariables.push(await this.resolveGlobalVariables(variable, files));
+                resolvedVariables.push(await this._resolveGlobalVariables(variable, files));
             } else if (typeof variable !== 'string') {
                 resolvedVariables.push(variable);
             } else {
@@ -313,7 +334,7 @@ export class TavernTestManager {
 
                     let variableValue = undefined;
                     for (const file of files) {
-                        let variableFile = this.globalVariables.get(basename(file));
+                        let variableFile = this._globalVariables.get(basename(file));
                         variableValue = variableFile?.get(variableKey);
                         if (variableValue !== undefined) {
                             break;
@@ -349,7 +370,7 @@ export class TavernTestManager {
         let args: string[] = [];
 
         if (test !== undefined) {
-            junitFile = `${this._workspaceCacheDirectory}/${this.generateHash(test)}`;
+            junitFile = `${this._workspaceCacheDirectory}/${this._generateHash(test)}`;
             args = [`"${test.nodeId}"`, `--junit-xml=${junitFile}`];
         } else {
             junitFile = this._testsMainJunitFile;
@@ -390,22 +411,13 @@ export class TavernTestManager {
         // could happen since spawn() runs asynchronously.
         await once(tavernciFinished, 'tavernci_finished');
 
-        let index = this.matchTestResults(
+        let index = this._matchTestResults(
             this._testsIndex,
             this._testsCache,
-            await this.loadTestResultsFromJunit(junitFile));
+            await this._loadTestResultsFromJunit(junitFile));
 
         await this._testsCache?.save();
 
         return index;
-    }
-
-    private generateHash(path: string): string;
-    private generateHash(test: TavernTest): string;
-    private generateHash(obj: string | TavernTest): string {
-        const hash = createHash('md5');
-        hash.update(obj instanceof TavernTest ? obj.nodeId : obj);
-
-        return hash.digest('hex');
     }
 }
