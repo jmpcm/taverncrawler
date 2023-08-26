@@ -13,8 +13,15 @@ export class TavernTestIndex extends Map<string, TavernTest> {
         let testsToAppend = test instanceof TavernTest ? [test] : test;
 
         testsToAppend.forEach(test => {
-            let fileTest = this.get(test.fileName)
-                ?? new TavernTest(test.fileName, TavernTestType.File, test.fileName);
+            let fileTest = this.get(test.fileLocation);
+
+            if (fileTest === undefined) {
+                fileTest = new TavernTest(
+                    basename(test.fileLocation),
+                    TavernTestType.File,
+                    test.fileLocation);
+                fileTest.relativeFileLocation = test.relativeFileLocation ?? '';
+            }
 
             if (!this.has(fileTest.nodeId)) {
                 this.set(fileTest.nodeId, fileTest);
@@ -27,7 +34,7 @@ export class TavernTestIndex extends Map<string, TavernTest> {
             }
 
             this.set(test.nodeId, test);
-            this._addToFileNodeIdsIndex(test.fileName, test.nodeId);
+            this._addToFileNodeIdsIndex(test.fileLocation, test.nodeId);
         });
     }
 

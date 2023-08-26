@@ -3,7 +3,7 @@ import { EventEmitter, once } from 'events';
 import { XMLParser } from 'fast-xml-parser';
 import { existsSync, mkdirSync, readFile } from 'fs';
 import { createHash } from 'node:crypto';
-import { basename, dirname, join } from 'path';
+import { basename, dirname, join, relative } from 'path';
 import { promisify } from 'util';
 import { LineCounter, parseAllDocuments } from 'yaml';
 import { TavernTest, TavernTestType, TavernTestResult, TavernTestState } from './tavernTest';
@@ -61,30 +61,36 @@ export class TavernTestManager {
     private _testsCacheFile: string;
     private _testsIndex = new TavernTestIndex();
     private _testsMainJunitFile: string;
-    private _workspaceId: string;
+    private _testsPath: string | undefined = undefined;
     private _workspaceCacheDirectory: string;
+    private _workspaceId: string;
     private _globalVariables = new Map<string, Map<string, any>>();
 
-    constructor(readonly testsPath: string) {
-        this.testsPath = testsPath;
+    constructor(readonly workspacePath: string, public testsFolder?: string) {
         this._extensionCacheDirectory = getExtensionCacheDirectory();
-        this._workspaceId = this._generateHash(this.testsPath);
+        this._workspaceId = this._generateHash(this.workspacePath);
         this._workspaceCacheDirectory = join(this._extensionCacheDirectory, this._workspaceId);
         this._testsMainJunitFile = join(this._workspaceCacheDirectory, this._workspaceId);
         this._testsCacheFile = join(this._workspaceCacheDirectory, `${this._workspaceId}.cache`);
         this._testsCache = new TavernTestCache(this._testsCacheFile);
+        this._testsPath = join(workspacePath, testsFolder ?? '');
 
         if (!existsSync(this._extensionCacheDirectory)) {
             mkdirSync(this._extensionCacheDirectory, { recursive: true });
         }
     }
 
-    async deleteTestFiles(testFiles: string[]): Promise<TavernTestIndex> {
-        // Remove old file from index and cache
-        for (const file of testFiles) {
-            const testsToDelete = this._testsIndex.getTestsForFile(basename(file));
-            testsToDelete.forEach(t => this._testsCache.delete(t.nodeId));
-            this._testsIndex.deleteFile(file);
+    async deleteTestFiles(testFiles?: string[]): Promise<TavernTestIndex> {
+        if (testFiles === undefined) {
+            // Remove all test from the index a file(s) was/were not specified.
+            this._testsIndex.clear();
+        } else {
+            // Remove old file from index and cache.
+            for (const file of testFiles) {
+                const testsToDelete = this._testsIndex.getTestsForFile(basename(file));
+                testsToDelete.forEach(t => this._testsCache.delete(t.nodeId));
+                this._testsIndex.deleteFile(file);
+            }
         }
 
         return this._testsIndex;
@@ -146,7 +152,7 @@ export class TavernTestManager {
 
         for (const file of testFiles) {
             const fileContent = await readFileAsync(file);
-            const fileName = basename(file);
+            const fileLocation = file;
             const filePath = dirname(file);
 
             // Parse the YAML documents in the file
@@ -162,17 +168,22 @@ export class TavernTestManager {
                 const includeFiles = jsDocument.includes?.map(
                     (f: string) => join(filePath, f)) ?? undefined;
 
-                await this._loadGlobalConfigurationVariables(includeFiles);
+                // Get the global variables that are referenced in this test. If the test file
+                // doesn't include any file with global configurations, then don't do anything.
+                if (includeFiles) {
+                    await this._loadGlobalConfigurationVariables(includeFiles);
 
-                // Get the global variables that are referenced in this test.
-                let testGlobalVariables = new Map<string, Map<string, any>>();
-                this._globalVariables.forEach((v: Map<string, any>, f: string) => {
-                    if (f in includeFiles) {
-                        testGlobalVariables.set(f, v);
-                    }
-                });
+                    let testGlobalVariables = new Map<string, Map<string, any>>();
+                    this._globalVariables.forEach((v: Map<string, any>, f: string) => {
+                        if (f in includeFiles) {
+                            testGlobalVariables.set(f, v);
+                        }
+                    });
+                }
 
-                let test = new TavernTest(jsDocument.test_name.trim(), TavernTestType.Test, fileName);
+
+                let test = new TavernTest(jsDocument.test_name.trim(), TavernTestType.Test, fileLocation);
+                test.relativeFileLocation = relative(this.workspacePath, fileLocation);
                 test.addStages(jsDocument.stages);
                 // test.addGlobalVariables(testGlobalVariables);
 
@@ -229,8 +240,14 @@ export class TavernTestManager {
             index = await this.loadTestFiles(resultFiles);
         }
 
-        // Load the cache
-        await this._testsCache.load();
+        try {
+            await this._testsCache.load();
+        }
+        catch (error) {
+            /* TODO improve the handling of this exception. Maybe ignore the exception, since the
+                    cache is empty, but still usable? */
+            console.log(error);
+        }
 
         return this._matchTestResults(index, this._testsCache);
     }
@@ -285,28 +302,14 @@ export class TavernTestManager {
         testsCache: TavernTestCache,
         junitResults?: Map<string, TavernTestResult>): TavernTestIndex {
 
-        for (let [nodeId, test] of testsIndex) {
-            let testResult = junitResults?.get(nodeId) ?? testsCache.getResult(nodeId);
+        for (const [nodeId, test] of testsIndex) {
+            const testResult = junitResults?.get(nodeId) ?? testsCache.getResult(nodeId);
 
             if (testResult === undefined) {
                 continue;
             }
 
             test.result = testResult;
-
-            // Set the results for the parameter tests.
-            if (test.type === TavernTestType.Test && test.childrenTests.length > 0) {
-                for (let paramTest of test.childrenTests) {
-                    let paramTestJunitResult =
-                        junitResults?.get(`${test.name}[${paramTest.name}]`)
-                        ?? testsCache.getResult(paramTest);
-
-                    if (paramTestJunitResult !== undefined) {
-                        paramTest.result = paramTestJunitResult;
-                    }
-                }
-            }
-
             this._testsCache?.setResult(test);
         }
 
@@ -361,8 +364,8 @@ export class TavernTestManager {
      */
     async runTest(test?: TavernTest): Promise<TavernTestIndex | undefined> {
         let pythonPath = 'PYTHONPATH' in process.env
-            ? `${process.env.PYTHONPATH}:${this.testsPath}`
-            : this.testsPath;
+            ? `${process.env.PYTHONPATH}:${this._testsPath}`
+            : this._testsPath;
         // eslint-disable-next-line @typescript-eslint/naming-convention
         let env = Object.assign(process.env, { 'PYTHONPATH': pythonPath });
 
@@ -374,7 +377,7 @@ export class TavernTestManager {
             args = [`"${test.nodeId}"`, `--junit-xml=${junitFile}`];
         } else {
             junitFile = this._testsMainJunitFile;
-            args = [this.testsPath, '-n', 'auto', `--junit-xml=${junitFile}`];
+            args = [this._testsPath ?? '', '-n', 'auto', `--junit-xml=${junitFile}`];
         }
 
         let pytestPath = getPytestPath();
@@ -382,14 +385,23 @@ export class TavernTestManager {
             throw new Error('Could not find pytest. Please verify that it is installed.');
         }
 
+        let tavernciFinished = new EventEmitter();
+        let tavernciError: string | undefined = undefined;
         let tavernci = spawn(
             pytestPath,
             args,
             {
-                cwd: this.testsPath,
+                cwd: this._testsPath,
                 detached: false,
                 shell: true,
                 env: env
+            }).on('error', (err) => {
+                tavernciError = 'Failed to run the test. Please check that pytest is installed and '
+                    + 'the configured tests folder (tavernCrawler.testsFolder) exists.';
+            }).on('close', async () => {
+                tavernciFinished.emit('tavernci_finished');
+            }).on('exit', async () => {
+                tavernciFinished.emit('tavernci_finished');
             });
 
         let data = "";
@@ -402,14 +414,13 @@ export class TavernTestManager {
             error += chunk;
         }
 
-        let tavernciFinished = new EventEmitter();
-        tavernci.on('close', async () => {
-            tavernciFinished.emit('tavernci_finished');
-        });
-
-        // Wait for the spawned process to finish. This voids that the junitFile is not found, which
-        // could happen since spawn() runs asynchronously.
+        // Wait for the spawned process to finish. This avoids not finding the junitFile, which can
+        // happen since spawn() runs asynchronously.
         await once(tavernciFinished, 'tavernci_finished');
+
+        if (tavernciError !== undefined) {
+            throw new Error(tavernciError);
+        }
 
         let index = this._matchTestResults(
             this._testsIndex,

@@ -130,7 +130,20 @@
                     "highContrastLight": "#f5dd06"
                 }
             }
-        ]
+        ],
+        "configuration": {
+            "title": "TavernCrawler",
+            "properties": {
+                "tavernCrawler.testsFolder": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": null,
+                    "description": "Folder where the Tavern files are placed."
+                }
+            }
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",

@@ -34,14 +34,14 @@ export class TavernTestCache extends Map<string, TavernTestResult> {
         }
 
         if (filePath === undefined && reload) {
-            throw new Error('A filePath was not specified. Nothing was reloaded.');
+            throw new Error('A path for the cache file was not specified. Nothing was reloaded.');
         }
 
         const filetoLoad = filePath ?? this.filePath;
         this.filePath = filetoLoad;
 
         if (!existsSync(filetoLoad)) {
-            throw new Error(`The file ${filePath} does not exist. Nothing was loaded.`);
+            throw new Error(`The cache file ${filePath} does not exist. Nothing was loaded.`);
         }
 
         const readFileAsync = promisify(readFile);

@@ -4,6 +4,7 @@ import { homedir } from 'os';
 
 
 export const APP_NAME: string = 'tavern-crawler';
+export const TAVERN_CRAWLER_CONFIG_ROOT_KEY = "tavernCrawler";
 export const TAVERN_FILE_EXTENSION = '.tavern.yaml';
 
 let extensionCacheDirectory: string | undefined = undefined;

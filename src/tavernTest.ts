@@ -1,3 +1,5 @@
+import { basename, sep } from "path";
+
 export enum TavernStageType {
     HTTP = 'http',
     MQTT = 'mqtt'
@@ -54,6 +56,7 @@ export class TavernTest {
     static DEFAULT_STATE: TavernTestState = TavernTestState.Unset;
     readonly description: string = '';
     fileLine: number = 1;
+    private _relativeFilePath: string | undefined; // Relative workspace test path of the Tavern test file
     // private globalVariables = new Map<string, any>();
     private _nodeId: string; // pytest's nodeId. The ID usually has the format <filename>::<testname>.
     public _parentTest: TavernTest | undefined = undefined;
@@ -67,7 +70,7 @@ export class TavernTest {
     constructor(
         readonly name: string,
         readonly type: TavernTestType,
-        public fileName: string,
+        public fileLocation: string
     ) {
         this.type = type;
         this.name = name;
@@ -76,11 +79,10 @@ export class TavernTest {
             name: '',
             state: TavernTest.DEFAULT_STATE
         };
-        this.fileName = fileName;
 
         this._nodeId = this.type === TavernTestType.File
-            ? `${this.fileName}`
-            : `${this.fileName}::${name}`;
+            ? `${this.fileLocation}`
+            : `${basename(this.fileLocation)}::${name}`;
     }
 
     get childrenTests(): TavernTest[] {
@@ -95,14 +97,30 @@ export class TavernTest {
         return this._nodeId;
     }
 
+    get relativeFileLocation(): string | undefined {
+        return this._relativeFilePath;
+    }
+
+    set relativeFileLocation(path: string) {
+        this._relativeFilePath = path;
+
+        if (this.type !== TavernTestType.File) {
+            // Update nodeId, which will have a name like "dir.file::nodeId"
+            const pathTokens = path.split(sep).slice(0, -1);
+            this._nodeId = `${pathTokens.join('.')}.${this._nodeId}`;
+        }
+    }
+
     get parentTest(): TavernTest | undefined {
         return this._parentTest;
     }
 
     set parentTest(test: TavernTest | undefined) {
         this._parentTest = test;
+
         if (this._parentTest !== undefined && this.type === TavernTestType.ParameterTest) {
-            this._nodeId = `${this.fileName}::${this._parentTest.name}[${this.name}]`;
+            this._nodeId = `${this._parentTest.nodeId}[${this.name}]`;
+            this._relativeFilePath = this._parentTest.relativeFileLocation ?? '';
         }
     }
 
@@ -157,9 +175,9 @@ export class TavernTest {
                 let name = Array.isArray(param) ? param.join('-') : param.toString();
 
                 let paramTest = new TavernTest(
-                    `${name}`,
+                    name,
                     TavernTestType.ParameterTest,
-                    this.fileName);
+                    this.fileLocation);
                 paramTest.fileLine = this.fileLine;
                 paramTest.parentTest = this;
 
@@ -177,7 +195,7 @@ export class TavernTest {
                         let paramTest = new TavernTest(
                             `${test.name}-${testNameParam.toString()}`,
                             TavernTestType.ParameterTest,
-                            this.fileName);
+                            this.fileLocation);
                         paramTest.fileLine = this.fileLine;
                         paramTest.parentTest = this;
 
