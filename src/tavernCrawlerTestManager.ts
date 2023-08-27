@@ -6,10 +6,15 @@ import { createHash } from 'node:crypto';
 import { basename, dirname, join, relative } from 'path';
 import { promisify } from 'util';
 import { LineCounter, parseAllDocuments } from 'yaml';
-import { TavernTest, TavernTestType, TavernTestResult, TavernTestState } from './tavernTest';
-import { TavernTestCache } from './tavernTestCache';
 import { getExtensionCacheDirectory, getPytestPath } from './tavernCrawlerCommon';
-import { TavernTestIndex } from './tavernTestIndex';
+import {
+    TavernCrawlerTest,
+    TavernTestType,
+    TavernTestResult,
+    TavernTestState
+} from './tavernCrawlerTest';
+import { TavernCrawlerTestsIndex } from './tavernCrawlerTestIndex';
+import { TavernCrawlerTestsCache } from './tavernCrawlerTestsCache';
 
 
 /** 
@@ -55,11 +60,11 @@ function isSameTest(line: Buffer, testName: string): boolean {
 };
 
 
-export class TavernTestManager {
+export class TavernCrawlerTestManager {
     private _extensionCacheDirectory: string;
-    private _testsCache: TavernTestCache;
+    private _testsCache: TavernCrawlerTestsCache;
     private _testsCacheFile: string;
-    private _testsIndex = new TavernTestIndex();
+    private _testsIndex = new TavernCrawlerTestsIndex();
     private _testsMainJunitFile: string;
     private _testsPath: string | undefined = undefined;
     private _workspaceCacheDirectory: string;
@@ -72,7 +77,7 @@ export class TavernTestManager {
         this._workspaceCacheDirectory = join(this._extensionCacheDirectory, this._workspaceId);
         this._testsMainJunitFile = join(this._workspaceCacheDirectory, this._workspaceId);
         this._testsCacheFile = join(this._workspaceCacheDirectory, `${this._workspaceId}.cache`);
-        this._testsCache = new TavernTestCache(this._testsCacheFile);
+        this._testsCache = new TavernCrawlerTestsCache(this._testsCacheFile);
         this._testsPath = join(workspacePath, testsFolder ?? '');
 
         if (!existsSync(this._extensionCacheDirectory)) {
@@ -80,7 +85,7 @@ export class TavernTestManager {
         }
     }
 
-    async deleteTestFiles(testFiles?: string[]): Promise<TavernTestIndex> {
+    async deleteTestFiles(testFiles?: string[]): Promise<TavernCrawlerTestsIndex> {
         if (testFiles === undefined) {
             // Remove all test from the index a file(s) was/were not specified.
             this._testsIndex.clear();
@@ -96,15 +101,15 @@ export class TavernTestManager {
         return this._testsIndex;
     }
 
-    async getTests(): Promise<TavernTestIndex | undefined> {
+    async getTests(): Promise<TavernCrawlerTestsIndex | undefined> {
         return await this.runTest();
     }
 
     private _generateHash(path: string): string;
-    private _generateHash(test: TavernTest): string;
-    private _generateHash(obj: string | TavernTest): string {
+    private _generateHash(test: TavernCrawlerTest): string;
+    private _generateHash(obj: string | TavernCrawlerTest): string {
         const hash = createHash('md5');
-        hash.update(obj instanceof TavernTest ? obj.nodeId : obj);
+        hash.update(obj instanceof TavernCrawlerTest ? obj.nodeId : obj);
 
         return hash.digest('hex');
     }
@@ -147,7 +152,7 @@ export class TavernTestManager {
         }
     }
 
-    async loadTestFiles(testFiles: string[]): Promise<TavernTestIndex> {
+    async loadTestFiles(testFiles: string[]): Promise<TavernCrawlerTestsIndex> {
         const readFileAsync = promisify(readFile);
 
         for (const file of testFiles) {
@@ -182,7 +187,10 @@ export class TavernTestManager {
                 }
 
 
-                let test = new TavernTest(jsDocument.test_name.trim(), TavernTestType.Test, fileLocation);
+                let test = new TavernCrawlerTest(
+                    jsDocument.test_name.trim(),
+                    TavernTestType.Test,
+                    fileLocation);
                 test.relativeFileLocation = relative(this.workspacePath, fileLocation);
                 test.addStages(jsDocument.stages);
                 // test.addGlobalVariables(testGlobalVariables);
@@ -222,8 +230,8 @@ export class TavernTestManager {
         return this._testsIndex;
     }
 
-    async loadTestResults(resultFiles?: string[]): Promise<TavernTestIndex> {
-        let index: TavernTestIndex = this._testsIndex;
+    async loadTestResults(resultFiles?: string[]): Promise<TavernCrawlerTestsIndex> {
+        let index: TavernCrawlerTestsIndex = this._testsIndex;
 
         // Load the test files. If a file has been previously loaded, first delete the results from
         // the index an rebuild the index for the file. This avoids duplicate entries when calling 
@@ -298,9 +306,9 @@ export class TavernTestManager {
     }
 
     private _matchTestResults(
-        testsIndex: TavernTestIndex,
-        testsCache: TavernTestCache,
-        junitResults?: Map<string, TavernTestResult>): TavernTestIndex {
+        testsIndex: TavernCrawlerTestsIndex,
+        testsCache: TavernCrawlerTestsCache,
+        junitResults?: Map<string, TavernTestResult>): TavernCrawlerTestsIndex {
 
         for (const [nodeId, test] of testsIndex) {
             const testResult = junitResults?.get(nodeId) ?? testsCache.getResult(nodeId);
@@ -362,7 +370,7 @@ export class TavernTestManager {
      * @param test 
      * @returns 
      */
-    async runTest(test?: TavernTest): Promise<TavernTestIndex | undefined> {
+    async runTest(test?: TavernCrawlerTest): Promise<TavernCrawlerTestsIndex | undefined> {
         let pythonPath = 'PYTHONPATH' in process.env
             ? `${process.env.PYTHONPATH}:${this._testsPath}`
             : this._testsPath;
@@ -377,7 +385,7 @@ export class TavernTestManager {
             args = [`"${test.nodeId}"`, `--junit-xml=${junitFile}`];
         } else {
             junitFile = this._testsMainJunitFile;
-            args = [this._testsPath ?? '', '-n', 'auto', `--junit-xml=${junitFile}`];
+            args = [/*this._testsPath*/this.workspacePath ?? '', '-n', 'auto', `--junit-xml=${junitFile}`];
         }
 
         let pytestPath = getPytestPath();
@@ -391,7 +399,7 @@ export class TavernTestManager {
             pytestPath,
             args,
             {
-                cwd: this._testsPath,
+                cwd: this.workspacePath,//._testsPath,
                 detached: false,
                 shell: true,
                 env: env

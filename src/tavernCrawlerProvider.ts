@@ -25,9 +25,9 @@ import {
     workspace
 } from 'vscode';
 import { TAVERN_FILE_EXTENSION } from './tavernCrawlerCommon';
-import { TavernTestManager } from './tavernTestManager';
-import { TavernTest, TavernTestState, TavernTestType } from './tavernTest';
-import { TavernTestIndex } from './tavernTestIndex';
+import { TavernCrawlerTestManager } from './tavernCrawlerTestManager';
+import { TavernCrawlerTest, TavernTestState, TavernTestType } from './tavernCrawlerTest';
+import { TavernCrawlerTestsIndex } from './tavernCrawlerTestIndex';
 
 
 const testStatIcons: Record<TavernTestState, ThemeIcon> = {
@@ -64,7 +64,7 @@ function getIcon(state: TavernTestState): ThemeIcon {
 class DecorationsMap {
     private decorators = new Map<string, Map<number, TextEditorDecorationType>>();
 
-    private static buildDecoration(test: TavernTest): TextEditorDecorationType {
+    private static buildDecoration(test: TavernCrawlerTest): TextEditorDecorationType {
         switch (test.result.state as TavernTestState) {
             case TavernTestState.Fail:
                 return window.createTextEditorDecorationType(
@@ -176,14 +176,14 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
     // structure can be used to do this assertion.
     private decoratorsMap = new DecorationsMap();
     private _onDidChangeTreeData = new EventEmitter<TavernTestTreeItem | undefined>();
-    private readonly _testsManager: TavernTestManager;
+    private readonly _testsManager: TavernCrawlerTestManager;
     private _treeNodes: TavernTestTreeItem[] = [];
     private _workspaceTavernFiles = new Map<string, Uri>();
 
     readonly onDidChangeTreeData?: Event<TavernTestTreeItem | undefined> =
         this._onDidChangeTreeData.event;
 
-    constructor(private context: ExtensionContext, testsManager: TavernTestManager) {
+    constructor(private context: ExtensionContext, testsManager: TavernCrawlerTestManager) {
         this._testsManager = testsManager;
 
         window.onDidChangeActiveTextEditor(async (editor) => {
@@ -199,7 +199,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
 
             const renamedFiles = event.files.filter(
                 fileRename => basename(fileRename.newUri.fsPath).endsWith(TAVERN_FILE_EXTENSION));
-            let tests: TavernTestIndex;
+            let tests: TavernCrawlerTestsIndex;
 
             for (const file of renamedFiles) {
                 this._testsManager.deleteTestFiles([file.oldUri.fsPath]);
@@ -225,7 +225,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
                 return;
             }
 
-            let tests: TavernTestIndex;
+            let tests: TavernCrawlerTestsIndex;
 
             try {
                 tests = await this._testsManager.loadTestResults([document.uri.fsPath]);
@@ -406,7 +406,7 @@ class TavernTestTreeItem extends TreeItem {
     readonly contextValue: string;
 
     constructor(
-        public readonly test: TavernTest,
+        public readonly test: TavernCrawlerTest,
         public readonly parentTest: TavernTestTreeItem | undefined = undefined) {
 
         super(
@@ -422,12 +422,12 @@ class TavernTestTreeItem extends TreeItem {
             : 'tavernTestTreeItemNoIcons';
     }
 
-    addChildren(tests: TavernTest[]): void {
+    addChildren(tests: TavernCrawlerTest[]): void {
         this.collapsibleState = TreeItemCollapsibleState.Collapsed;
 
         this.children.push.apply(
             this.children,
-            tests.map((t: TavernTest) => {
+            tests.map((t: TavernCrawlerTest) => {
                 let treeItemTest = new TavernTestTreeItem(t, this);
 
                 if (t.childrenTests.length > 0) {
@@ -456,7 +456,7 @@ class TavernTestTreeItem extends TreeItem {
         this.label = TavernTestTreeItem.createLabel(this.test);
     }
 
-    private static createLabel(test: TavernTest): string {
+    private static createLabel(test: TavernCrawlerTest): string {
         return test.type === TavernTestType.File
             ? `${test.relativeFileLocation}    [${test.childrenTestsPassCount}/${test.childrenTests.length}]`
             : test.name;

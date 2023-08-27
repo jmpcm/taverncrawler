@@ -1,4 +1,4 @@
-import { basename, sep } from "path";
+import { basename, sep } from 'path';
 
 export enum TavernStageType {
     HTTP = 'http',
@@ -52,16 +52,16 @@ export interface TavernTestStage {
 }
 
 
-export class TavernTest {
+export class TavernCrawlerTest {
     static DEFAULT_STATE: TavernTestState = TavernTestState.Unset;
     readonly description: string = '';
     fileLine: number = 1;
     private _relativeFilePath: string | undefined; // Relative workspace test path of the Tavern test file
     // private globalVariables = new Map<string, any>();
     private _nodeId: string; // pytest's nodeId. The ID usually has the format <filename>::<testname>.
-    public _parentTest: TavernTest | undefined = undefined;
+    public _parentTest: TavernCrawlerTest | undefined = undefined;
     // private otherMarks: string[] = [];
-    private _childrenTests = new Map<string, TavernTest>();
+    private _childrenTests = new Map<string, TavernCrawlerTest>();
     private _result: TavernTestResult;
     private _stages: TavernTestStage[] = [];
     // private _parameters: string[] = [];
@@ -77,7 +77,7 @@ export class TavernTest {
         this._result = {
             failure: undefined,
             name: '',
-            state: TavernTest.DEFAULT_STATE
+            state: TavernCrawlerTest.DEFAULT_STATE
         };
 
         this._nodeId = this.type === TavernTestType.File
@@ -85,7 +85,7 @@ export class TavernTest {
             : `${basename(this.fileLocation)}::${name}`;
     }
 
-    get childrenTests(): TavernTest[] {
+    get childrenTests(): TavernCrawlerTest[] {
         return Array.from(this._childrenTests.values());
     }
 
@@ -111,11 +111,11 @@ export class TavernTest {
         }
     }
 
-    get parentTest(): TavernTest | undefined {
+    get parentTest(): TavernCrawlerTest | undefined {
         return this._parentTest;
     }
 
-    set parentTest(test: TavernTest | undefined) {
+    set parentTest(test: TavernCrawlerTest | undefined) {
         this._parentTest = test;
 
         if (this._parentTest !== undefined && this.type === TavernTestType.ParameterTest) {
@@ -130,13 +130,13 @@ export class TavernTest {
 
     set result(result: TavernTestResult) {
         this._result = result;
-        this.result.state = this.evaluateState();
+        this.result.state = this._evaluateState();
 
         if (this._parentTest !== undefined) {
             this._parentTest.result = {
                 name: '',
                 failure: undefined,
-                state: this._parentTest.evaluateState()
+                state: this._parentTest._evaluateState()
             };
         }
     }
@@ -144,6 +144,16 @@ export class TavernTest {
     get stages(): TavernTestStage[] {
         return this._stages;
     };
+
+    /**
+     * 
+     * @param tests 
+     */
+    addChildrenTests(tests: TavernCrawlerTest[] | TavernCrawlerTest): void {
+        for (const test of Array.isArray(tests) ? tests : [tests]) {
+            this._childrenTests.set(test.nodeId, test);
+        }
+    }
 
     /**
      * Add global variables to the test. The test can later resolve any variables when adding stages
@@ -174,7 +184,7 @@ export class TavernTest {
             for (let param of parameters) {
                 let name = Array.isArray(param) ? param.join('-') : param.toString();
 
-                let paramTest = new TavernTest(
+                let paramTest = new TavernCrawlerTest(
                     name,
                     TavernTestType.ParameterTest,
                     this.fileLocation);
@@ -186,13 +196,13 @@ export class TavernTest {
         } else {
             // If the test already has parameters, then merge these with the new ones. Tavern
             // parameter tests named are formed by joining all parameters, separated by an hifen.
-            let newTestNameParameters: TavernTest[] = [];
+            let newTestNameParameters: TavernCrawlerTest[] = [];
 
             for (let testNameParam of parameters) {
                 newTestNameParameters.push.apply(
                     newTestNameParameters,
                     Array.from(this._childrenTests).map(([testNodeId, test]) => {
-                        let paramTest = new TavernTest(
+                        let paramTest = new TavernCrawlerTest(
                             `${test.name}-${testNameParam.toString()}`,
                             TavernTestType.ParameterTest,
                             this.fileLocation);
@@ -204,7 +214,7 @@ export class TavernTest {
                     ));
             }
 
-            this._childrenTests = new Map<string, TavernTest>(
+            this._childrenTests = new Map<string, TavernCrawlerTest>(
                 newTestNameParameters.map(t => [t.nodeId, t]));
         }
     }
@@ -218,35 +228,25 @@ export class TavernTest {
     }
 
     /**
-     * 
-     * @param tests 
-     */
-    addTests(tests: TavernTest[] | TavernTest): void {
-        for (const test of Array.isArray(tests) ? tests : [tests]) {
-            this._childrenTests.set(test.nodeId, test);
-        }
-    }
-
-    /**
      * Recursively evaluate the state of a test. This will occur for tests that are either a file,
      * or have parameters to evalute.
      * 
      * @param {TavernTestTreeItem[]} children - array of tests to be evaluated
      * @returns the current state of the test
      */
-    private evaluateState(children?: TavernTest[] | undefined): TavernTestState {
+    private _evaluateState(children?: TavernCrawlerTest[] | undefined): TavernTestState {
         let childrenToEvaluate = children === undefined ? this.childrenTests : children;
 
         if (childrenToEvaluate.length === 0) {
             return this._result.state;
         }
 
-        let state = childrenToEvaluate.at(0)?.result.state ?? TavernTest.DEFAULT_STATE;
+        let state = childrenToEvaluate.at(0)?.result.state ?? TavernCrawlerTest.DEFAULT_STATE;
         this._childrenTestsPassCount = 0;
 
         for (const child of childrenToEvaluate) {
             if (child._childrenTests.size > 0) {
-                child.evaluateState();
+                child._evaluateState();
             }
 
             state = state <= child.result.state ? child.result.state : state;

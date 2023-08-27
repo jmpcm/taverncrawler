@@ -1,6 +1,6 @@
 import { commands, ExtensionContext, window, workspace } from 'vscode';
 import { TavernCrawlerProvider } from './tavernCrawlerProvider';
-import { TavernTestManager } from './tavernTestManager';
+import { TavernCrawlerTestManager } from './tavernCrawlerTestManager';
 import { TAVERN_CRAWLER_CONFIG_ROOT_KEY } from './tavernCrawlerCommon';
 import { existsSync } from 'node:fs';
 import { join } from 'path';
@@ -29,7 +29,7 @@ export async function activate(context: ExtensionContext) {
         testsFolderPath = undefined;
     }
 
-    let testsManager = new TavernTestManager(workspacePath, testsFolderPath);
+    let testsManager = new TavernCrawlerTestManager(workspacePath, testsFolderPath);
     const tavernCrawlerProvider = new TavernCrawlerProvider(context, testsManager);
 
     window.createTreeView('taverncrawler', { treeDataProvider: tavernCrawlerProvider });

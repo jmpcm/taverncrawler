@@ -1,35 +1,35 @@
 import { basename } from 'path';
-import { TavernTest, TavernTestType } from './tavernTest';
+import { TavernCrawlerTest, TavernTestType } from './tavernCrawlerTest';
 
 
-export class TavernTestIndex extends Map<string, TavernTest> {
+export class TavernCrawlerTestsIndex extends Map<string, TavernCrawlerTest> {
     private _filesNodeIdsIndex = new Map<string, Set<string>>();
 
-    addTest(test: TavernTest | TavernTest[]): void {
+    addTest(test: TavernCrawlerTest | TavernCrawlerTest[]): void {
         if (test === undefined) {
             throw new Error("test object can't be undefined");
         }
 
-        let testsToAppend = test instanceof TavernTest ? [test] : test;
+        let testsToAppend = test instanceof TavernCrawlerTest ? [test] : test;
 
         testsToAppend.forEach(test => {
-            let fileTest = this.get(test.fileLocation);
+            let parentTestFile = this.get(test.fileLocation);
 
-            if (fileTest === undefined) {
-                fileTest = new TavernTest(
+            if (parentTestFile === undefined) {
+                parentTestFile = new TavernCrawlerTest(
                     basename(test.fileLocation),
                     TavernTestType.File,
                     test.fileLocation);
-                fileTest.relativeFileLocation = test.relativeFileLocation ?? '';
+                parentTestFile.relativeFileLocation = test.relativeFileLocation ?? '';
             }
 
-            if (!this.has(fileTest.nodeId)) {
-                this.set(fileTest.nodeId, fileTest);
+            if (!this.has(parentTestFile.nodeId)) {
+                this.set(parentTestFile.nodeId, parentTestFile);
             }
 
             if (test.type === TavernTestType.Test) {
-                test.parentTest = fileTest;
-                fileTest.addTests(test);
+                test.parentTest = parentTestFile;
+                parentTestFile.addChildrenTests(test);
                 test.childrenTests.forEach(child => this.addTest(child));
             }
 
@@ -54,8 +54,8 @@ export class TavernTestIndex extends Map<string, TavernTest> {
         }
     }
 
-    filter(type: TavernTestType): TavernTest[] {
-        let results: TavernTest[] = [];
+    filter(type: TavernTestType): TavernCrawlerTest[] {
+        let results: TavernCrawlerTest[] = [];
 
         this.forEach((test, _) => {
             if (test.type === type) {
@@ -66,15 +66,30 @@ export class TavernTestIndex extends Map<string, TavernTest> {
         return results;
     }
 
-    getTest(test: TavernTest): TavernTest | undefined;
-    getTest(nodeId: string): TavernTest | undefined;
-    getTest(testOrNodeId: string | TavernTest | TavernTestType): TavernTest | TavernTest[] | undefined {
-        return this.get(testOrNodeId instanceof TavernTest ? testOrNodeId.nodeId : testOrNodeId);
+    getTest(test: TavernCrawlerTest): TavernCrawlerTest | undefined;
+    getTest(nodeId: string): TavernCrawlerTest | undefined;
+    getTest(callback: (test: TavernCrawlerTest) => boolean): TavernCrawlerTest | undefined;
+    getTest(testOrNodeId: string | TavernCrawlerTest | TavernTestType | ((test: TavernCrawlerTest) => boolean)):
+        TavernCrawlerTest | TavernCrawlerTest[] | undefined {
+        // return this.get(testOrNodeId instanceof TavernTest ? testOrNodeId.nodeId : testOrNodeId);
+        if (testOrNodeId instanceof TavernCrawlerTest) {
+            return this.get(testOrNodeId.nodeId);
+        } else if (typeof testOrNodeId === 'string') {
+            return this.get(testOrNodeId);
+        } else {
+            for (const [_, test] of this) {
+                if (testOrNodeId(test)) {
+                    return test;
+                }
+            }
+
+            return undefined;
+        }
     }
 
-    getTestsForFile(file: string): TavernTest[] {
+    getTestsForFile(file: string): TavernCrawlerTest[] {
         const nodeIds = this._filesNodeIdsIndex.get(file);
-        let tests: TavernTest[] = [];
+        let tests: TavernCrawlerTest[] = [];
 
         this.forEach(t => {
             if (nodeIds?.has(t.nodeId)) {

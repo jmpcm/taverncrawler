@@ -1,9 +1,9 @@
 import { existsSync, readFile, writeFile } from 'fs';
 import { promisify } from 'util';
-import { getCachedState, TavernTest, TavernTestResult } from './tavernTest';
+import { getCachedState, TavernCrawlerTest, TavernTestResult } from './tavernCrawlerTest';
 
 
-export class TavernTestCache extends Map<string, TavernTestResult> {
+export class TavernCrawlerTestsCache extends Map<string, TavernTestResult> {
     private _cacheLoaded: boolean = false;
     private _savingToFile: boolean = false;
 
@@ -12,10 +12,10 @@ export class TavernTestCache extends Map<string, TavernTestResult> {
         this.filePath = filePath;
     }
 
-    getResult(test: TavernTest): TavernTestResult | undefined;
+    getResult(test: TavernCrawlerTest): TavernTestResult | undefined;
     getResult(nodeId: string): TavernTestResult | undefined;
-    getResult(testOrNodeId: string | TavernTest): TavernTestResult | undefined {
-        let result = this.get(testOrNodeId instanceof TavernTest
+    getResult(testOrNodeId: string | TavernCrawlerTest): TavernTestResult | undefined {
+        let result = this.get(testOrNodeId instanceof TavernCrawlerTest
             ? testOrNodeId.nodeId
             : testOrNodeId);
 
@@ -68,12 +68,12 @@ export class TavernTestCache extends Map<string, TavernTestResult> {
         writeFile(file, await this.toJson(), 'utf8', () => { this._savingToFile = false; });
     }
 
-    setResult(test: TavernTest | TavernTest[]): void {
+    setResult(test: TavernCrawlerTest | TavernCrawlerTest[]): void {
         if (test === undefined) {
             throw new Error("test object can't be undefined");
         }
 
-        let testsToAppend = test instanceof TavernTest ? [test] : test;
+        let testsToAppend = test instanceof TavernCrawlerTest ? [test] : test;
 
         testsToAppend.forEach(test => {
             this.set(test.nodeId, test.result);
