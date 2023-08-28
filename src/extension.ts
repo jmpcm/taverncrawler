@@ -1,8 +1,8 @@
 import { commands, ExtensionContext, window, workspace } from 'vscode';
 import { TavernCrawlerProvider } from './tavernCrawlerProvider';
 import { TavernCrawlerTestManager } from './tavernCrawlerTestManager';
-import { TAVERN_CRAWLER_CONFIG_ROOT_KEY } from './tavernCrawlerCommon';
-import { existsSync } from 'node:fs';
+import { getExtensionCacheDirectory, TAVERN_CRAWLER_CONFIG_ROOT_KEY } from './tavernCrawlerCommon';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'path';
 
 
@@ -11,6 +11,16 @@ export async function activate(context: ExtensionContext) {
         window.showErrorMessage(
             'Tavern Crawler will not load any tests, because a workspace is not open.');
         return;
+    }
+
+    let extensionOutputChannel = window.createOutputChannel("Tavern Crawler");
+
+    // Create cache directory
+    const extensionCacheDirectory: string = getExtensionCacheDirectory();
+    extensionOutputChannel.appendLine(`Exists? ${existsSync(extensionCacheDirectory)}`);
+    if (!existsSync(extensionCacheDirectory)) {
+        extensionOutputChannel.appendLine(`Create dir ${extensionCacheDirectory}`);
+        mkdirSync(extensionCacheDirectory, { recursive: true });
     }
 
     const workspacePath = workspace.workspaceFolders[0].uri.fsPath;
@@ -30,6 +40,8 @@ export async function activate(context: ExtensionContext) {
     }
 
     let testsManager = new TavernCrawlerTestManager(workspacePath, testsFolderPath);
+    testsManager.ouputChannel = extensionOutputChannel;
+
     const tavernCrawlerProvider = new TavernCrawlerProvider(context, testsManager);
 
     window.createTreeView('taverncrawler', { treeDataProvider: tavernCrawlerProvider });

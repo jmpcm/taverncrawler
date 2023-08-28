@@ -15,6 +15,7 @@ import {
 } from './tavernCrawlerTest';
 import { TavernCrawlerTestsIndex } from './tavernCrawlerTestIndex';
 import { TavernCrawlerTestsCache } from './tavernCrawlerTestsCache';
+import { OutputChannel } from 'vscode';
 
 
 /** 
@@ -61,7 +62,7 @@ function isSameTest(line: Buffer, testName: string): boolean {
 
 
 export class TavernCrawlerTestManager {
-    private _extensionCacheDirectory: string;
+    private _outputChannel: OutputChannel | undefined;
     private _testsCache: TavernCrawlerTestsCache;
     private _testsCacheFile: string;
     private _testsIndex = new TavernCrawlerTestsIndex();
@@ -72,17 +73,20 @@ export class TavernCrawlerTestManager {
     private _globalVariables = new Map<string, Map<string, any>>();
 
     constructor(readonly workspacePath: string, public testsFolder?: string) {
-        this._extensionCacheDirectory = getExtensionCacheDirectory();
         this._workspaceId = this._generateHash(this.workspacePath);
-        this._workspaceCacheDirectory = join(this._extensionCacheDirectory, this._workspaceId);
+        this._workspaceCacheDirectory = join(getExtensionCacheDirectory(), this._workspaceId);
         this._testsMainJunitFile = join(this._workspaceCacheDirectory, this._workspaceId);
         this._testsCacheFile = join(this._workspaceCacheDirectory, `${this._workspaceId}.cache`);
         this._testsCache = new TavernCrawlerTestsCache(this._testsCacheFile);
-        this._testsPath = join(workspacePath, testsFolder ?? '');
+        this._testsPath = join(this.workspacePath, testsFolder ?? '');
 
-        if (!existsSync(this._extensionCacheDirectory)) {
-            mkdirSync(this._extensionCacheDirectory, { recursive: true });
+        if (!existsSync(this._workspaceCacheDirectory)) {
+            mkdirSync(this._workspaceCacheDirectory, { recursive: true });
         }
+    }
+
+    set ouputChannel(channel: OutputChannel) {
+        this._outputChannel = channel;
     }
 
     async deleteTestFiles(testFiles?: string[]): Promise<TavernCrawlerTestsIndex> {
@@ -99,10 +103,6 @@ export class TavernCrawlerTestManager {
         }
 
         return this._testsIndex;
-    }
-
-    async getTests(): Promise<TavernCrawlerTestsIndex | undefined> {
-        return await this.runTest();
     }
 
     private _generateHash(path: string): string;
@@ -185,7 +185,6 @@ export class TavernCrawlerTestManager {
                         }
                     });
                 }
-
 
                 let test = new TavernCrawlerTest(
                     jsDocument.test_name.trim(),
@@ -370,22 +369,29 @@ export class TavernCrawlerTestManager {
      * @param test 
      * @returns 
      */
-    async runTest(test?: TavernCrawlerTest): Promise<TavernCrawlerTestsIndex | undefined> {
+    async runTest(test: TavernCrawlerTest | IterableIterator<string>): Promise<TavernCrawlerTestsIndex | undefined> {
         let pythonPath = 'PYTHONPATH' in process.env
             ? `${process.env.PYTHONPATH}:${this._testsPath}`
             : this._testsPath;
+        this._outputChannel?.appendLine(`${pythonPath}`);
         // eslint-disable-next-line @typescript-eslint/naming-convention
         let env = Object.assign(process.env, { 'PYTHONPATH': pythonPath });
 
         let junitFile: string = '';
         let args: string[] = [];
 
-        if (test !== undefined) {
+        if (test instanceof TavernCrawlerTest) {
             junitFile = `${this._workspaceCacheDirectory}/${this._generateHash(test)}`;
-            args = [`"${test.nodeId}"`, `--junit-xml=${junitFile}`];
+            args = [
+                test.type === TavernTestType.File
+                    ? `"${test.nodeId}"`
+                    : `${dirname(test.fileLocation)}/"${test.nodeId}"`,
+                `--junit-xml=${junitFile}`
+            ];
         } else {
             junitFile = this._testsMainJunitFile;
-            args = [/*this._testsPath*/this.workspacePath ?? '', '-n', 'auto', `--junit-xml=${junitFile}`];
+            this._outputChannel!.appendLine(`this.workspacePath = ${this.workspacePath}`);
+            args = [Array.from(test).join(" "), '-n', 'auto', `--junit-xml=${junitFile}`];
         }
 
         let pytestPath = getPytestPath();
@@ -393,33 +399,35 @@ export class TavernCrawlerTestManager {
             throw new Error('Could not find pytest. Please verify that it is installed.');
         }
 
+        this._outputChannel?.append(`${pytestPath} ${args.join(' ')}`);
+
         let tavernciFinished = new EventEmitter();
         let tavernciError: string | undefined = undefined;
         let tavernci = spawn(
             pytestPath,
             args,
             {
-                cwd: this.workspacePath,//._testsPath,
+                // cwd: this.workspacePath,
                 detached: false,
                 shell: true,
                 env: env
             }).on('error', (err) => {
                 tavernciError = 'Failed to run the test. Please check that pytest is installed and '
                     + 'the configured tests folder (tavernCrawler.testsFolder) exists.';
-            }).on('close', async () => {
+                this._outputChannel?.appendLine(`error = ${err}`);
                 tavernciFinished.emit('tavernci_finished');
-            }).on('exit', async () => {
+            }).on('close', async (err) => {
+                tavernciFinished.emit('tavernci_finished');
+            }).on('exit', async (err) => {
                 tavernciFinished.emit('tavernci_finished');
             });
 
-        let data = "";
         for await (const chunk of tavernci.stdout) {
-            data += chunk;
+            this._outputChannel?.append(`${chunk}`);
         }
 
-        let error = "";
         for await (const chunk of tavernci.stderr) {
-            error += chunk;
+            this._outputChannel?.append(`${chunk}`);
         }
 
         // Wait for the spawned process to finish. This avoids not finding the junitFile, which can

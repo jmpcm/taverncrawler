@@ -10,7 +10,7 @@ export const TAVERN_FILE_EXTENSION = '.tavern.yaml';
 let extensionCacheDirectory: string | undefined = undefined;
 let pytestPath: string | undefined = undefined;
 
-export function getExtensionCacheDirectory(create: boolean = true): string {
+export function getExtensionCacheDirectory(): string {
     if (extensionCacheDirectory !== undefined) {
         return extensionCacheDirectory;
     }
@@ -23,10 +23,6 @@ export function getExtensionCacheDirectory(create: boolean = true): string {
         extensionCacheDirectory = `${process.env.APPDATA}/${APP_NAME}`;
     } else {
         extensionCacheDirectory = `/var/tmp/${APP_NAME}`;
-    }
-
-    if (create && !existsSync(extensionCacheDirectory)) {
-        mkdirSync(extensionCacheDirectory, { recursive: true });
     }
 
     return extensionCacheDirectory;

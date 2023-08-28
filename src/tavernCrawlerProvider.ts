@@ -346,7 +346,8 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         applyIconToTreeItems(this._treeNodes, getIcon(TavernTestState.Running));
         this._onDidChangeTreeData.fire(undefined);
 
-        const tests = await this._testsManager.runTest();
+        const testFiles = this._workspaceTavernFiles.keys();
+        const tests = await this._testsManager.runTest(testFiles);
 
         if (tests === undefined) {
             // TODO write to console the error

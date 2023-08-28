@@ -56,7 +56,7 @@ export class TavernCrawlerTest {
     static DEFAULT_STATE: TavernTestState = TavernTestState.Unset;
     readonly description: string = '';
     fileLine: number = 1;
-    private _relativeFilePath: string | undefined; // Relative workspace test path of the Tavern test file
+    relativeFileLocation: string | undefined;// Relative workspace test path of the Tavern test file
     // private globalVariables = new Map<string, any>();
     private _nodeId: string; // pytest's nodeId. The ID usually has the format <filename>::<testname>.
     public _parentTest: TavernCrawlerTest | undefined = undefined;
@@ -97,20 +97,6 @@ export class TavernCrawlerTest {
         return this._nodeId;
     }
 
-    get relativeFileLocation(): string | undefined {
-        return this._relativeFilePath;
-    }
-
-    set relativeFileLocation(path: string) {
-        this._relativeFilePath = path;
-
-        if (this.type !== TavernTestType.File) {
-            // Update nodeId, which will have a name like "dir.file::nodeId"
-            const pathTokens = path.split(sep).slice(0, -1);
-            this._nodeId = `${pathTokens.join('.')}.${this._nodeId}`;
-        }
-    }
-
     get parentTest(): TavernCrawlerTest | undefined {
         return this._parentTest;
     }
@@ -120,7 +106,7 @@ export class TavernCrawlerTest {
 
         if (this._parentTest !== undefined && this.type === TavernTestType.ParameterTest) {
             this._nodeId = `${this._parentTest.nodeId}[${this.name}]`;
-            this._relativeFilePath = this._parentTest.relativeFileLocation ?? '';
+            this.relativeFileLocation = this._parentTest.relativeFileLocation ?? '';
         }
     }
 
