@@ -1,9 +1,13 @@
-import { commands, ExtensionContext, window, workspace } from 'vscode';
-import { TavernCrawlerProvider } from './tavernCrawlerProvider';
-import { TavernCrawlerTestManager } from './tavernCrawlerTestManager';
-import { getExtensionCacheDirectory, TAVERN_CRAWLER_CONFIG_ROOT_KEY } from './tavernCrawlerCommon';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'path';
+import { ExtensionContext, commands, window, workspace } from 'vscode';
+import {
+    TAVERN_CRAWLER_CONFIG_ROOT_KEY,
+    getExtensionCacheDirectory,
+    getOutputChannel
+} from './tavernCrawlerCommon';
+import { TavernCrawlerProvider } from './tavernCrawlerProvider';
+import { TavernCrawlerTestManager } from './tavernCrawlerTestManager';
 
 
 export async function activate(context: ExtensionContext) {
@@ -13,14 +17,15 @@ export async function activate(context: ExtensionContext) {
         return;
     }
 
-    let extensionOutputChannel = window.createOutputChannel("Tavern Crawler");
+    const extensionOutputChannel = getOutputChannel();
 
     // Create cache directory
     const extensionCacheDirectory: string = getExtensionCacheDirectory();
-    extensionOutputChannel.appendLine(`Exists? ${existsSync(extensionCacheDirectory)}`);
+
     if (!existsSync(extensionCacheDirectory)) {
-        extensionOutputChannel.appendLine(`Create dir ${extensionCacheDirectory}`);
+        extensionOutputChannel.append(`Creating cache directory ${extensionCacheDirectory}...`);
         mkdirSync(extensionCacheDirectory, { recursive: true });
+        extensionOutputChannel.appendLine(' done');
     }
 
     const workspacePath = workspace.workspaceFolders[0].uri.fsPath;
@@ -40,7 +45,7 @@ export async function activate(context: ExtensionContext) {
     }
 
     let testsManager = new TavernCrawlerTestManager(workspacePath, testsFolderPath);
-    testsManager.ouputChannel = extensionOutputChannel;
+    testsManager.ouputChannel = getOutputChannel();
 
     const tavernCrawlerProvider = new TavernCrawlerProvider(context, testsManager);
 
@@ -73,10 +78,6 @@ export async function activate(context: ExtensionContext) {
     });
     commands.registerCommand('taverncrawler.runTests', () =>
         tavernCrawlerProvider.runAllTests());
-
-    // Use the console to output diagnostic information (console.log) and errors (console.error)
-    // This line of code will only be executed once when your extension is activated
-    console.log('Tavern Crawler is now active!');
 }
 
 // This method is called when your extension is deactivated

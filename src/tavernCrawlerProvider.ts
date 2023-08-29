@@ -24,7 +24,12 @@ import {
     window,
     workspace
 } from 'vscode';
-import { TAVERN_FILE_EXTENSION } from './tavernCrawlerCommon';
+import {
+    TAVERN_FILE_EXTENSION,
+    getNow,
+    getOutputChannel,
+    getSessionUuid
+} from './tavernCrawlerCommon';
 import { TavernCrawlerTestManager } from './tavernCrawlerTestManager';
 import { TavernCrawlerTest, TavernTestState, TavernTestType } from './tavernCrawlerTest';
 import { TavernCrawlerTestsIndex } from './tavernCrawlerTestIndex';
@@ -346,12 +351,35 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         applyIconToTreeItems(this._treeNodes, getIcon(TavernTestState.Running));
         this._onDidChangeTreeData.fire(undefined);
 
-        const testFiles = this._workspaceTavernFiles.keys();
-        const tests = await this._testsManager.runTest(testFiles);
+        let testFiles = Array.from(this._workspaceTavernFiles.keys());
 
-        if (tests === undefined) {
-            // TODO write to console the error
+        const outputChannel = getOutputChannel();
+        const sessionId = getSessionUuid();
+        const startTime = getNow();
+        const logMessage = [
+            '*'.repeat(10),
+            `Started session ${sessionId} at ${startTime.toISOString()}`,
+            '*'.repeat(10),
+            '\nTest files:\n'
+        ];
+        logMessage.push(...testFiles.map(f => `   ${f}\n`));
+
+        outputChannel.appendLine(`${logMessage.join(' ')}`);
+
+        let tests: TavernCrawlerTestsIndex;
+        try {
+            tests = await this._testsManager.runTest(testFiles);
+        } catch (err) {
+            const outputChannel = getOutputChannel();
+            outputChannel.appendLine(err instanceof Error ? err.message : err as any);
+
             return;
+        } finally {
+            const endTime = getNow();
+            const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+            outputChannel.appendLine(
+                `${"*".repeat(10)} Stopped session ${sessionId} at ${endTime.toISOString()} `
+                + `(${duration} seconds) ${"*".repeat(10)}\n\n\n`);
         }
 
         // Repopulate the tree
@@ -371,10 +399,29 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         applyIconToTreeItems(item.children, getIcon(TavernTestState.Running));
         this._onDidChangeTreeData.fire(undefined);
 
+        const outputChannel = getOutputChannel();
+        const sessionId = getSessionUuid();
+        const startTime = getNow();
+        const logMessage = [
+            '*'.repeat(10),
+            `Started session ${sessionId} at ${startTime.toISOString()}`,
+            '*'.repeat(10),
+            `\nTest name: ${item.test.name}`,
+            `\nNodeId: ${item.test.nodeId}`
+        ];
+
+        outputChannel.appendLine(`${logMessage.join(' ')}`);
+
         try {
             await this._testsManager.runTest(item.test);
         } catch (error: any) {
             window.showErrorMessage(error.message);
+        }
+        finally {
+            const endTime = getNow();
+            const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+            outputChannel.appendLine(
+                `${"*".repeat(10)} Stopped session ${sessionId} at ${endTime.toISOString()} (${duration} seconds) ${"*".repeat(10)}\n\n\n`);
         }
 
         // Set the tree item's icon with the test's current state, update the state of each of the

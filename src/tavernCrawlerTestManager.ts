@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFile } from 'fs';
 import { createHash } from 'node:crypto';
 import { basename, dirname, join, relative } from 'path';
 import { promisify } from 'util';
-import { LineCounter, parseAllDocuments } from 'yaml';
+import { Document, LineCounter, parseAllDocuments } from 'yaml';
 import { getExtensionCacheDirectory, getPytestPath } from './tavernCrawlerCommon';
 import {
     TavernCrawlerTest,
@@ -157,8 +157,6 @@ export class TavernCrawlerTestManager {
 
         for (const file of testFiles) {
             const fileContent = await readFileAsync(file);
-            const fileLocation = file;
-            const filePath = dirname(file);
 
             // Parse the YAML documents in the file
             let lineCounter = new LineCounter();
@@ -166,33 +164,15 @@ export class TavernCrawlerTestManager {
                 fileContent.toString(),
                 { lineCounter: lineCounter });
 
-            // Build the test objects
             let lastTestsFoundIndex = 0;
-            let tests = await Promise.all(testDocuments.map(async document => {
-                const jsDocument = document.toJS();
-                const includeFiles = jsDocument.includes?.map(
-                    (f: string) => join(filePath, f)) ?? undefined;
+            let tests: TavernCrawlerTest[] = [];
 
-                // Get the global variables that are referenced in this test. If the test file
-                // doesn't include any file with global configurations, then don't do anything.
-                if (includeFiles) {
-                    await this._loadGlobalConfigurationVariables(includeFiles);
+            for (let document of testDocuments) {
+                let test = await this._parseTestDocument(document, file);
 
-                    let testGlobalVariables = new Map<string, Map<string, any>>();
-                    this._globalVariables.forEach((v: Map<string, any>, f: string) => {
-                        if (f in includeFiles) {
-                            testGlobalVariables.set(f, v);
-                        }
-                    });
+                if (test === undefined) {
+                    continue;
                 }
-
-                let test = new TavernCrawlerTest(
-                    jsDocument.test_name.trim(),
-                    TavernTestType.Test,
-                    fileLocation);
-                test.relativeFileLocation = relative(this.workspacePath, fileLocation);
-                test.addStages(jsDocument.stages);
-                // test.addGlobalVariables(testGlobalVariables);
 
                 // Discover the line where the test is placed. The search starts after the last test
                 // index found, since these are in order.
@@ -208,20 +188,8 @@ export class TavernCrawlerTestManager {
                     }
                 }
 
-                // The test has parameters, which indicates that the test will have "sub-tests",
-                // i.e. a test for combinations of parameters.
-                if ('marks' in jsDocument) {
-                    for (let mark of jsDocument.marks) {
-                        if (typeof mark === 'object' && 'parametrize' in mark) {
-                            test.addParameters(
-                                await this._resolveGlobalVariables(
-                                    mark.parametrize.vals, includeFiles));
-                        }
-                    }
-                }
-
-                return test;
-            }));
+                tests = tests.concat(test);
+            }
 
             this._testsIndex.addTest(tests);
         }
@@ -323,6 +291,51 @@ export class TavernCrawlerTestManager {
         return testsIndex;
     }
 
+    private async _parseTestDocument(document: Document, file: string): Promise<TavernCrawlerTest | undefined> {
+        const filePath = dirname(file);
+        const jsDocument = document.toJS();
+
+        // This can happen if the document separator (---) is left, but it contains nothing.
+        if (jsDocument === null) {
+            return;
+        }
+
+        const includeFiles = jsDocument.includes?.map(
+            (f: string) => join(filePath, f)) ?? undefined;
+
+        // Get the global variables that are referenced in this test. If the test file
+        // doesn't include any file with global configurations, then don't do anything.
+        if (includeFiles) {
+            await this._loadGlobalConfigurationVariables(includeFiles);
+
+            let testGlobalVariables = new Map<string, Map<string, any>>();
+            this._globalVariables.forEach((v: Map<string, any>, f: string) => {
+                if (f in includeFiles) {
+                    testGlobalVariables.set(f, v);
+                }
+            });
+        }
+
+        let test = new TavernCrawlerTest(jsDocument.test_name.trim(), TavernTestType.Test, file);
+        test.relativeFileLocation = relative(this.workspacePath, file);
+        test.addStages(jsDocument.stages);
+        // test.addGlobalVariables(testGlobalVariables);
+
+        // The test has parameters, which indicates that the test will have "sub-tests",
+        // i.e. a test for combinations of parameters.
+        if ('marks' in jsDocument) {
+            for (let mark of jsDocument.marks) {
+                if (typeof mark === 'object' && 'parametrize' in mark) {
+                    test.addParameters(
+                        await this._resolveGlobalVariables(
+                            mark.parametrize.vals, includeFiles));
+                }
+            }
+        }
+
+        return test;
+    }
+
     private async _resolveGlobalVariables(variables: string[] | any[][], files: string[]): Promise<string[]> {
         let resolvedVariables: any[] = [];
 
@@ -369,11 +382,12 @@ export class TavernCrawlerTestManager {
      * @param test 
      * @returns 
      */
-    async runTest(test: TavernCrawlerTest | IterableIterator<string>): Promise<TavernCrawlerTestsIndex | undefined> {
+    async runTest(test: TavernCrawlerTest | string[]): Promise<TavernCrawlerTestsIndex> {
         let pythonPath = 'PYTHONPATH' in process.env
             ? `${process.env.PYTHONPATH}:${this._testsPath}`
             : this._testsPath;
-        this._outputChannel?.appendLine(`${pythonPath}`);
+        this._outputChannel?.appendLine(`PYTHONPATH = ${pythonPath}`);
+
         // eslint-disable-next-line @typescript-eslint/naming-convention
         let env = Object.assign(process.env, { 'PYTHONPATH': pythonPath });
 
@@ -386,12 +400,20 @@ export class TavernCrawlerTestManager {
                 test.type === TavernTestType.File
                     ? `"${test.nodeId}"`
                     : `${dirname(test.fileLocation)}/"${test.nodeId}"`,
-                `--junit-xml=${junitFile}`
+                `--junit-xml=${junitFile}`,
+                '-W ignore::DeprecationWarning',
+                '--disable-warnings'
             ];
         } else {
             junitFile = this._testsMainJunitFile;
-            this._outputChannel!.appendLine(`this.workspacePath = ${this.workspacePath}`);
-            args = [Array.from(test).join(" "), '-n', 'auto', `--junit-xml=${junitFile}`];
+            args = [
+                Array.from(test).join(" "),
+                '-n',
+                'auto',
+                `--junit-xml=${junitFile}`,
+                '-W ignore::DeprecationWarning',
+                '--disable-warnings'
+            ];
         }
 
         let pytestPath = getPytestPath();
@@ -399,7 +421,7 @@ export class TavernCrawlerTestManager {
             throw new Error('Could not find pytest. Please verify that it is installed.');
         }
 
-        this._outputChannel?.append(`${pytestPath} ${args.join(' ')}`);
+        this._outputChannel?.append(`Executing command: ${pytestPath} ${args.join(' ')}\n\n`);
 
         let tavernciFinished = new EventEmitter();
         let tavernciError: string | undefined = undefined;
