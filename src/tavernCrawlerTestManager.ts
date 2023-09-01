@@ -89,15 +89,24 @@ export class TavernCrawlerTestManager {
         this._outputChannel = channel;
     }
 
-    async deleteTestFiles(testFiles?: string[]): Promise<TavernCrawlerTestsIndex> {
+    /**
+     * Delete all tests from the tests index and cache.
+     * @param testFiles files whose tests must be deleted in the index
+     * @param clearCache indicate if the tests cache should also be cleared
+     * @returns 
+     */
+    async deleteTestFiles(testFiles?: string[], clearCache: boolean = true): Promise<TavernCrawlerTestsIndex> {
         if (testFiles === undefined) {
             // Remove all test from the index a file(s) was/were not specified.
             this._testsIndex.clear();
         } else {
             // Remove old file from index and cache.
             for (const file of testFiles) {
-                const testsToDelete = this._testsIndex.getTestsForFile(file);
-                testsToDelete.forEach(t => this._testsCache.delete(t.nodeId));
+                if (clearCache) {
+                    const testsToDelete = this._testsIndex.getTestsForFile(file);
+                    testsToDelete.forEach(t => this._testsCache.delete(t.nodeId));
+                }
+
                 this._testsIndex.deleteFile(file);
             }
         }

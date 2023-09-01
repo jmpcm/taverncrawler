@@ -54,7 +54,7 @@ export class TavernCrawlerTestsIndex extends Map<string, TavernCrawlerTest> {
         }
     }
 
-    filter(type: TavernTestType): TavernCrawlerTest[] {
+    filter(type: TavernTestType, sort:boolean=false): TavernCrawlerTest[] {
         let results: TavernCrawlerTest[] = [];
 
         this.forEach((test, _) => {
@@ -62,6 +62,10 @@ export class TavernCrawlerTestsIndex extends Map<string, TavernCrawlerTest> {
                 results.push(test);
             }
         });
+
+        if (sort) {
+            results = results.sort((t1, t2) => t1.nodeId.localeCompare(t2.nodeId));
+        }
 
         return results;
     }

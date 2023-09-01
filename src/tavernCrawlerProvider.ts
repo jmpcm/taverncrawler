@@ -203,24 +203,13 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
                 return;
             }
 
-            const renamedFiles = event.files.filter(
-                fileRename => isTavernFile(fileRename.newUri.fsPath));
-            let tests: TavernCrawlerTestsIndex;
+            const renamedFiles = event.files.filter(file => isTavernFile(file.newUri.fsPath));
 
-            for (const file of renamedFiles) {
-                this._testsManager.deleteTestFiles([file.oldUri.fsPath]);
-                tests = await this._testsManager.loadTestFiles([file.newUri.fsPath]);
-            }
+            this._testsManager.deleteTestFiles(renamedFiles.map(f => f.oldUri.fsPath));
+            let testsIndex = await this._testsManager.loadTestFiles(
+                renamedFiles.map(f => f.newUri.fsPath));
 
-            // Repopulate the tree when the document is saved, so that if there changes in the
-            // number of tests, these are reflected in the tree.
-            this._treeNodes.length = 0;
-            for (let test of tests!.filter(TavernTestType.File)) {
-                let treeItem = new TavernTestTreeItem(test);
-                treeItem.addChildren(test.childrenTests);
-
-                this._treeNodes.push(treeItem);
-            }
+            this._fillTestTree(testsIndex);
             this._onDidChangeTreeData.fire(undefined);
         });
 
@@ -229,24 +218,16 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
                 return;
             }
 
-            let tests: TavernCrawlerTestsIndex;
+            let testsIndex: TavernCrawlerTestsIndex;
             try {
-                this._testsManager.deleteTestFiles([document.uri.fsPath]);
-                tests = await this._testsManager.loadTestResults([document.uri.fsPath]);
+                this._testsManager.deleteTestFiles([document.uri.fsPath], false);
+                testsIndex = await this._testsManager.loadTestResults([document.uri.fsPath]);
             } catch (error) {
                 getOutputChannel().appendLine(`[Tavern Crawler] ${error}`);
                 return;
             }
 
-            // Repopulate the tree when the document is saved, so that if there changes in the
-            // number of tests, thiese are reflected in the tree.
-            this._treeNodes.length = 0;
-            for (let test of tests.filter(TavernTestType.File)) {
-                let treeItem = new TavernTestTreeItem(test);
-                treeItem.addChildren(test.childrenTests);
-
-                this._treeNodes.push(treeItem);
-            }
+            this._fillTestTree(testsIndex);
             this._onDidChangeTreeData.fire(undefined);
         });
     }
@@ -271,12 +252,19 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         );
     }
 
-    getChildren(element?: TavernTestTreeItem): ProviderResult<TavernTestTreeItem[]> {
-        if (element) {
-            return Promise.resolve(element.children);
-        }
+    private _fillTestTree(testsIndex: TavernCrawlerTestsIndex) {
+        this._treeNodes.length = 0;
 
-        return Promise.resolve(this._treeNodes);
+        for (let test of testsIndex.filter(TavernTestType.File, true)) {
+            let treeItem = new TavernTestTreeItem(test);
+            treeItem.addChildren(test.childrenTests);
+
+            this._treeNodes.push(treeItem);
+        }
+    }
+
+    getChildren(element?: TavernTestTreeItem): ProviderResult<TavernTestTreeItem[]> {
+        return Promise.resolve(element !== undefined ? element.children : this._treeNodes);
     }
 
     getTreeItem = (node: TavernTestTreeItem) => node;
@@ -320,25 +308,19 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
     async refresh() {
         // If the tests were previsouly loaded, then clear the tree first, otherwise the tests will
         // appear duplicated.
-        this._treeNodes.length = 0;
         this._testsManager.deleteTestFiles();
 
         const testFiles = await this._discoverTavernTestFiles(this._testsManager.testsFolder);
         await this._testsManager.loadTestFiles(Array.from(testFiles.values()).map(t => t.fsPath));
-        const tests = await this._testsManager.loadTestResults();
+        const testsIndex = await this._testsManager.loadTestResults();
 
-        for (let test of tests.filter(TavernTestType.File)) {
-            let treeItem = new TavernTestTreeItem(test);
-            treeItem.addChildren(test.childrenTests);
-
-            this._treeNodes.push(treeItem);
-        }
+        this._fillTestTree(testsIndex);
 
         // If the focused document is a test file, then decorate it.
         const focusedDocument = window.activeTextEditor?.document;
 
         if (focusedDocument !== undefined
-            && tests.getTest(basename(focusedDocument.fileName)) !== undefined) {
+            && testsIndex.getTest(focusedDocument.fileName) !== undefined) {
             let editor = await window.showTextDocument(focusedDocument);
             this._decorateFile(editor);
         }
@@ -365,9 +347,9 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
 
         outputChannel.appendLine(`${logMessage.join(' ')}`);
 
-        let tests: TavernCrawlerTestsIndex;
+        let testsIndex: TavernCrawlerTestsIndex;
         try {
-            tests = await this._testsManager.runTest(testFiles);
+            testsIndex = await this._testsManager.runTest(testFiles);
         } catch (err) {
             const outputChannel = getOutputChannel();
             outputChannel.appendLine(err instanceof Error ? err.message : err as any);
@@ -381,14 +363,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
                 + `(${duration} seconds) ${"*".repeat(10)}\n\n\n`);
         }
 
-        // Repopulate the tree
-        this._treeNodes.length = 0;
-        for (let test of tests.filter(TavernTestType.File)) {
-            let treeItem = new TavernTestTreeItem(test);
-            treeItem.addChildren(test.childrenTests);
-
-            this._treeNodes.push(treeItem);
-        }
+        this._fillTestTree(testsIndex);
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -436,7 +411,6 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
 
         // Update the decoration of the test in the file, if the file is open. If it isn't, then do 
         // nothing.
-        const entries = workspace.textDocuments.entries();
         const document = workspace.textDocuments.find(
             (d: TextDocument) => d.fileName === item.test.fileLocation);
 
