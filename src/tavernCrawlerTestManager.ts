@@ -96,7 +96,7 @@ export class TavernCrawlerTestManager {
         } else {
             // Remove old file from index and cache.
             for (const file of testFiles) {
-                const testsToDelete = this._testsIndex.getTestsForFile(basename(file));
+                const testsToDelete = this._testsIndex.getTestsForFile(file);
                 testsToDelete.forEach(t => this._testsCache.delete(t.nodeId));
                 this._testsIndex.deleteFile(file);
             }
@@ -204,25 +204,11 @@ export class TavernCrawlerTestManager {
         // the index an rebuild the index for the file. This avoids duplicate entries when calling 
         // loadTestFiles(), which doesn't look for (therefore, remove) duplicate entries. 
         if (resultFiles !== undefined) {
-            for (const file of resultFiles) {
-                index.forEach((test) => {
-                    if (test.nodeId.startsWith(basename(file))) {
-                        index.delete(test.nodeId);
-                    }
-                });
-            }
-
+            resultFiles.forEach(f => index.deleteFile(f));
             index = await this.loadTestFiles(resultFiles);
         }
 
-        try {
-            await this._testsCache.load();
-        }
-        catch (error) {
-            /* TODO improve the handling of this exception. Maybe ignore the exception, since the
-                    cache is empty, but still usable? */
-            console.log(error);
-        }
+        await this._testsCache.load();
 
         return this._matchTestResults(index, this._testsCache);
     }

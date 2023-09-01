@@ -105,14 +105,13 @@ export class TavernCrawlerTestsIndex extends Map<string, TavernCrawlerTest> {
      * @param {string} file name of the file to delete
      */
     deleteFile(file: string): void {
-        const fileName = basename(file);
-        const nodeIds = this._filesNodeIdsIndex.get(fileName);
+        const nodeIds = this._filesNodeIdsIndex.get(file);
 
         if (nodeIds === undefined) {
             return;
         }
 
         nodeIds.forEach(n => this.delete(n));
-        this.delete(fileName);
+        this.delete(file);
     }
 }

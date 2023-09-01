@@ -28,7 +28,8 @@ import {
     TAVERN_FILE_EXTENSION,
     getNow,
     getOutputChannel,
-    getSessionUuid
+    getSessionUuid,
+    isTavernFile
 } from './tavernCrawlerCommon';
 import { TavernCrawlerTestManager } from './tavernCrawlerTestManager';
 import { TavernCrawlerTest, TavernTestState, TavernTestType } from './tavernCrawlerTest';
@@ -192,7 +193,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         this._testsManager = testsManager;
 
         window.onDidChangeActiveTextEditor(async (editor) => {
-            if (editor !== undefined && editor.document.fileName.endsWith(TAVERN_FILE_EXTENSION)) {
+            if (editor !== undefined && isTavernFile(editor.document.fileName)) {
                 this._decorateFile(editor);
             }
         });
@@ -203,7 +204,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
             }
 
             const renamedFiles = event.files.filter(
-                fileRename => basename(fileRename.newUri.fsPath).endsWith(TAVERN_FILE_EXTENSION));
+                fileRename => isTavernFile(fileRename.newUri.fsPath));
             let tests: TavernCrawlerTestsIndex;
 
             for (const file of renamedFiles) {
@@ -224,18 +225,16 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         });
 
         workspace.onDidSaveTextDocument(async (document: TextDocument) => {
-            const filename = basename(document.fileName);
-
-            if (!filename.endsWith(TAVERN_FILE_EXTENSION)) {
+            if (!isTavernFile(document.fileName)) {
                 return;
             }
 
             let tests: TavernCrawlerTestsIndex;
-
             try {
+                this._testsManager.deleteTestFiles([document.uri.fsPath]);
                 tests = await this._testsManager.loadTestResults([document.uri.fsPath]);
             } catch (error) {
-                console.error(`[Tavern Crawler] ${error}`);
+                getOutputChannel().appendLine(`[Tavern Crawler] ${error}`);
                 return;
             }
 
