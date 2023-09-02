@@ -15,6 +15,7 @@ import {
 } from './tavernCrawlerTest';
 import { TavernCrawlerTestsIndex } from './tavernCrawlerTestIndex';
 import { TavernCrawlerTestsCache } from './tavernCrawlerTestsCache';
+import { TavernCrawlerTestsFactory } from './tavernCrawlerTestsFactory';
 import { OutputChannel } from 'vscode';
 
 
@@ -65,6 +66,7 @@ export class TavernCrawlerTestManager {
     private _outputChannel: OutputChannel | undefined;
     private _testsCache: TavernCrawlerTestsCache;
     private _testsCacheFile: string;
+    private _testsFactory?: TavernCrawlerTestsFactory;
     private _testsIndex = new TavernCrawlerTestsIndex();
     private _testsMainJunitFile: string;
     private _testsPath: string | undefined = undefined;
@@ -72,7 +74,10 @@ export class TavernCrawlerTestManager {
     private _workspaceId: string;
     private _globalVariables = new Map<string, Map<string, any>>();
 
-    constructor(readonly workspacePath: string, public testsFolder?: string) {
+    constructor(
+        readonly workspacePath: string,
+        public testsFolder: string | undefined) {
+
         this._workspaceId = this._generateHash(this.workspacePath);
         this._workspaceCacheDirectory = join(getExtensionCacheDirectory(), this._workspaceId);
         this._testsMainJunitFile = join(this._workspaceCacheDirectory, this._workspaceId);
@@ -82,6 +87,22 @@ export class TavernCrawlerTestManager {
 
         if (!existsSync(this._workspaceCacheDirectory)) {
             mkdirSync(this._workspaceCacheDirectory, { recursive: true });
+        }
+    }
+
+    get commonDirectory(): string | undefined {
+        return this._testsFactory !== undefined ? this._testsFactory.commonDirectoryPath : undefined;
+    }
+
+    set commonDirectory(dir: string | undefined) {
+        if (this._testsFactory === undefined) {
+            this._testsFactory = new TavernCrawlerTestsFactory(
+                this.workspacePath,
+                this.testsFolder,
+                dir);
+        }
+        else {
+            this._testsFactory.commonDirectoryPath = dir;
         }
     }
 
@@ -311,8 +332,7 @@ export class TavernCrawlerTestManager {
             });
         }
 
-        let test = new TavernCrawlerTest(jsDocument.test_name.trim(), TavernTestType.Test, file);
-        test.relativeFileLocation = relative(this.workspacePath, file);
+        let test = this._testsFactory!.create(TavernTestType.Test, jsDocument.test_name.trim(), file);
         test.addStages(jsDocument.stages);
         // test.addGlobalVariables(testGlobalVariables);
 
@@ -378,9 +398,25 @@ export class TavernCrawlerTestManager {
      * @returns 
      */
     async runTest(test: TavernCrawlerTest | string[]): Promise<TavernCrawlerTestsIndex> {
-        let pythonPath = 'PYTHONPATH' in process.env
-            ? `${process.env.PYTHONPATH}:${this._testsPath}`
-            : this._testsPath;
+        let pythonPath = 'PYTHONPATH' in process.env ? process.env.PYTHONPATH : this._testsPath;
+
+        // Extract the paths of all files to later append to PYTHONPATH. This is necessary because
+        // Python scripts with Tavern external functions, must be in the PYTHONPATH. This assumes
+        // these files are in the same directory of the Tavern files. More info:
+        // https://tavern.readthedocs.io/en/latest/basics.html#calling-external-functions
+        let filePaths = new Set(
+            (test instanceof TavernCrawlerTest ? [test.fileLocation] : test).map(t => {
+                const dir = dirname(t);
+                if (!pythonPath?.includes(dir)) {
+                    return dir;
+                }
+            }));
+        filePaths.delete(undefined);
+
+        if (filePaths.size > 0) {
+            pythonPath = `${pythonPath}:${Array.from(filePaths).join(':')}`;
+        }
+
         this._outputChannel?.appendLine(`PYTHONPATH = ${pythonPath}`);
 
         // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -394,10 +430,16 @@ export class TavernCrawlerTestManager {
             args = [
                 test.type === TavernTestType.File
                     ? `"${test.nodeId}"`
-                    : `${dirname(test.fileLocation)}/"${test.nodeId}"`,
+                    // Split the nodeId and append the test name with the fileLocation. This way,
+                    // pytest knows in which file to look for the test to run - this is one of the
+                    // wasy to invoke pytest.
+                    : `${test.fileLocation}::"${test.nodeId.split('::')[1]}"`,
+                '-n',
+                'auto',
                 `--junit-xml=${junitFile}`,
                 '-W ignore::DeprecationWarning',
-                '--disable-warnings'
+                '--disable-warnings',
+                `--rootdir=${this._testsFactory?.commonDirectoryPath}`
             ];
         } else {
             junitFile = this._testsMainJunitFile;
@@ -407,7 +449,8 @@ export class TavernCrawlerTestManager {
                 'auto',
                 `--junit-xml=${junitFile}`,
                 '-W ignore::DeprecationWarning',
-                '--disable-warnings'
+                '--disable-warnings',
+                `--rootdir=${this._testsFactory?.commonDirectoryPath}`
             ];
         }
 

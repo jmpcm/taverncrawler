@@ -56,9 +56,9 @@ export class TavernCrawlerTest {
     static DEFAULT_STATE: TavernTestState = TavernTestState.Unset;
     readonly description: string = '';
     fileLine: number = 1;
+    nodeId: string; // pytest's nodeId. The ID usually has the format <filename>::<testname>.
     relativeFileLocation: string | undefined;// Relative workspace test path of the Tavern test file
     // private globalVariables = new Map<string, any>();
-    private _nodeId: string; // pytest's nodeId. The ID usually has the format <filename>::<testname>.
     public _parentTest: TavernCrawlerTest | undefined = undefined;
     // private otherMarks: string[] = [];
     private _childrenTests = new Map<string, TavernCrawlerTest>();
@@ -80,7 +80,7 @@ export class TavernCrawlerTest {
             state: TavernCrawlerTest.DEFAULT_STATE
         };
 
-        this._nodeId = this.type === TavernTestType.File
+        this.nodeId = this.type === TavernTestType.File
             ? `${this.fileLocation}`
             : `${basename(this.fileLocation)}::${name}`;
     }
@@ -93,10 +93,6 @@ export class TavernCrawlerTest {
         return this._childrenTestsPassCount;
     }
 
-    get nodeId(): string {
-        return this._nodeId;
-    }
-
     get parentTest(): TavernCrawlerTest | undefined {
         return this._parentTest;
     }
@@ -105,7 +101,7 @@ export class TavernCrawlerTest {
         this._parentTest = test;
 
         if (this._parentTest !== undefined && this.type === TavernTestType.ParameterTest) {
-            this._nodeId = `${this._parentTest.nodeId}[${this.name}]`;
+            this.nodeId = `${this._parentTest.nodeId}[${this.name}]`;
             this.relativeFileLocation = this._parentTest.relativeFileLocation ?? '';
         }
     }

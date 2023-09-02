@@ -15,7 +15,7 @@ let extensionOutputChannel: OutputChannel | undefined = undefined;
 let pytestPath: string | undefined = undefined;
 
 
-function findCommonDirectory(filePaths: string[]): string | undefined {
+export function findCommonDirectory(filePaths: string[]): string | undefined {
     if (filePaths.length === 0) {
         return undefined;
     }

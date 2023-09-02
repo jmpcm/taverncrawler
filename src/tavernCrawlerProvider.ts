@@ -26,6 +26,7 @@ import {
 } from 'vscode';
 import {
     TAVERN_FILE_EXTENSION,
+    findCommonDirectory,
     getNow,
     getOutputChannel,
     getSessionUuid,
@@ -189,8 +190,14 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
     readonly onDidChangeTreeData?: Event<TavernTestTreeItem | undefined> =
         this._onDidChangeTreeData.event;
 
-    constructor(private context: ExtensionContext, testsManager: TavernCrawlerTestManager) {
-        this._testsManager = testsManager;
+    constructor(
+        readonly workspacePath: string,
+        testsFolderPath: string | undefined) {
+
+        this._testsManager = new TavernCrawlerTestManager(
+            this.workspacePath,
+            testsFolderPath);
+        this._testsManager.ouputChannel = getOutputChannel();
 
         window.onDidChangeActiveTextEditor(async (editor) => {
             if (editor !== undefined && isTavernFile(editor.document.fileName)) {
@@ -230,6 +237,14 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
             this._fillTestTree(testsIndex);
             this._onDidChangeTreeData.fire(undefined);
         });
+    }
+
+    get testsFolderPath(): string | undefined {
+        return this._testsManager.testsFolder;
+    }
+
+    set testsFolderPath(dir: string | undefined) {
+        this._testsManager.testsFolder = dir;
     }
 
     private async _decorateFile(editor: TextEditor): Promise<void> {
@@ -311,6 +326,8 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         this._testsManager.deleteTestFiles();
 
         const testFiles = await this._discoverTavernTestFiles(this._testsManager.testsFolder);
+        this._testsManager.commonDirectory = findCommonDirectory(Array.from(testFiles.keys()));
+
         await this._testsManager.loadTestFiles(Array.from(testFiles.values()).map(t => t.fsPath));
         const testsIndex = await this._testsManager.loadTestResults();
 
