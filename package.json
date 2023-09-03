@@ -7,7 +7,8 @@
         "vscode": "^1.78.0"
     },
     "categories": [
-        "Other"
+        "Testing",
+        "Snippets"
     ],
     "activationEvents": [
         "onView:nodeDependencies"
@@ -143,7 +144,13 @@
                     "description": "Folder where the Tavern files are placed."
                 }
             }
-        }
+        },
+        "snippets": [
+            {
+              "language": "yaml",
+              "path": "./snippets/tavern.json"
+            }
+          ]
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
@@ -170,6 +177,7 @@
     },
     "dependencies": {
         "fast-xml-parser": "^4.2.2",
+        "oas-normalize": "^8.4.1",
         "which": "^3.0.1",
         "yaml": "^2.2.2"
     }

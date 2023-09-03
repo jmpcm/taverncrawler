@@ -23,7 +23,8 @@
         "curly": "warn",
         "eqeqeq": "warn",
         "no-throw-literal": "warn",
-        "semi": "off"
+        "semi": "off",
+        "function-call-argument-newline": ["warn", "consistent"]
     },
     "ignorePatterns": [
         "out",

@@ -1,0 +1,78 @@
+{
+    "Tavern HTTP test": {
+        "prefix": [
+            "tavern-http-test"
+        ],
+        "body": [
+            "---",
+            "test_name: $1",
+            "  stages:",
+            "    - name: $2",
+            "      request:",
+            "        url: $3",
+            "        method: ${4|GET,POST,PUT,DELETE,PATCH|}",
+            "      response:",
+            "        status_code: $5"
+        ],
+        "description": "Tavern test snippet"
+    },
+    "Tavern HTTP stage": {
+        "prefix": [
+            "tavern-http-stage"
+        ],
+        "body": [
+            "- name: $1",
+            "  request:",
+            "    url: $2",
+            "    method: ${3|GET,POST,PUT,DELETE,PATCH|}",
+            "  response:",
+            "    status_code: $4"
+        ],
+        "description": "Tavern test stage"
+    },
+    "Tavern MQTT test": {
+        "prefix": [
+            "tavern-mqtt-test"
+        ],
+        "body": [
+            "---",
+            "test_name: $1",
+            "paho-mqtt:",
+            "  client:",
+            "    transport: ${2|tcp,websockets|}",
+            "    client_id: tavern-tester",
+            "  connect:",
+            "    host: $3",
+            "    port: 1883",
+            "",
+            "stages:",
+            "  - name: $4",
+            "    mqtt_publish:",
+            "      topic: $5",
+            "      payload: $6"
+        ],
+        "description": "Tavern MQTT test snippet"
+    },
+    "Tavern MQTT request stage": {
+        "prefix": [
+            "tavern-mqtt-publish"
+        ],
+        "body": [
+            "mqtt_publish:",
+            "  topic: $1",
+            "  payload: $2"
+        ],
+        "description": "Tavern MQTT publish"
+    },
+    "Tavern MQTT reply stage": {
+        "prefix": [
+            "tavern-mqtt-reply"
+        ],
+        "body": [
+            "mqtt_response:",
+            "  topic: $1",
+            "  payload: $2"
+        ],
+        "description": "Tavern MQTT reply"
+    }
+}
