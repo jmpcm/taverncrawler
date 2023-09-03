@@ -439,6 +439,18 @@ export class TavernCrawlerTestManager {
                 `--junit-xml=${junitFile}`,
                 '-W ignore::DeprecationWarning',
                 '--disable-warnings',
+                // The rootdir is the reference directory, from where pytest is executed and builds
+                // the nodeIDs. In this application, it can be, for example, the workspace
+                // directory, or the path to workspace plus the testsFolder setting.
+                // It usually is the minimum common directory of all files whose tests will be
+                // executed. Therefore, if several files are given, it is necessary to find the
+                // common directory to all of them. For one test, the rootdir is the directory where
+                // the file is placed.
+                // The rootdir has to be set, because it is necessary to have a predictable way to
+                // assert what will be the test's node IDs, especially in the case of files placed
+                // in multiple directories. Such nodes will have the format such as 
+                // "test.integration.testfile.tavern.yaml::Test", depending on the rootdir.
+                // More info: https://docs.pytest.org/en/7.3.x/reference/customize.html#initialization-determining-rootdir-and-configfile
                 `--rootdir=${this._testsFactory?.commonDirectoryPath}`
             ];
         } else {
@@ -450,6 +462,7 @@ export class TavernCrawlerTestManager {
                 `--junit-xml=${junitFile}`,
                 '-W ignore::DeprecationWarning',
                 '--disable-warnings',
+                // Info on the rootdir above.
                 `--rootdir=${this._testsFactory?.commonDirectoryPath}`
             ];
         }
