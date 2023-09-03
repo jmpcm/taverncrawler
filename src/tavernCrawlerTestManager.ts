@@ -253,6 +253,7 @@ export class TavernCrawlerTestManager {
         const readFileAsync = promisify(readFile);
         const fileContent = await readFileAsync(junitFile, 'utf-8');
         const xmlData = parser.parse(fileContent.toString());
+        const runTimestamp = Date.parse(xmlData.testsuites.testsuite["@_timestamp"]);
 
         // Load the test results from the JUnit file. If only one test is executed, the result is a
         // single instance of a testcase, while multiple tests are an array of testcase obejcts.
@@ -278,6 +279,7 @@ export class TavernCrawlerTestManager {
 
             let junitTest: TavernTestResult = {
                 name: `${testcase['@_classname']}::${testcase['@_name']}`,
+                lastRun: runTimestamp,
                 failure: failure,
                 state: state
             };

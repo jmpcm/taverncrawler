@@ -35,8 +35,19 @@ export function getCachedState(state: TavernTestState): TavernTestState {
     return state >> 4;
 }
 
+export function getUncachedState(state: TavernTestState): TavernTestState {
+    if (state === TavernTestState.FailCached
+        || state === TavernTestState.SkippedCached
+        || state === TavernTestState.PassCached) {
+        return state << 4;
+    }
+
+    return state;
+}
+
 export interface TavernTestResult {
     failure: string | undefined;
+    lastRun: number | undefined;
     name: string;
     state: TavernTestState;
 }
@@ -76,6 +87,7 @@ export class TavernCrawlerTest {
         this.name = name;
         this._result = {
             failure: undefined,
+            lastRun: undefined,
             name: '',
             state: TavernCrawlerTest.DEFAULT_STATE
         };
@@ -117,6 +129,7 @@ export class TavernCrawlerTest {
         if (this._parentTest !== undefined) {
             this._parentTest.result = {
                 name: '',
+                lastRun: result.lastRun,
                 failure: undefined,
                 state: this._parentTest._evaluateState()
             };

@@ -4,7 +4,6 @@ import {
     DecorationRangeBehavior,
     Event,
     EventEmitter,
-    ExtensionContext,
     FileRenameEvent,
     MarkdownString,
     Position,
@@ -32,9 +31,14 @@ import {
     getSessionUuid,
     isTavernFile
 } from './tavernCrawlerCommon';
-import { TavernCrawlerTestManager } from './tavernCrawlerTestManager';
-import { TavernCrawlerTest, TavernTestState, TavernTestType } from './tavernCrawlerTest';
+import {
+    TavernCrawlerTest,
+    TavernTestState,
+    TavernTestType,
+    getUncachedState
+} from './tavernCrawlerTest';
 import { TavernCrawlerTestsIndex } from './tavernCrawlerTestIndex';
+import { TavernCrawlerTestManager } from './tavernCrawlerTestManager';
 
 
 const testStatIcons: Record<TavernTestState, ThemeIcon> = {
@@ -448,11 +452,22 @@ class TavernTestTreeItem extends TreeItem {
         public readonly parentTest: TavernTestTreeItem | undefined = undefined) {
 
         super(
-            TavernTestTreeItem.createLabel(test),
+            TavernTestTreeItem._createLabel(test),
             test.type === TavernTestType.File
                 ? TreeItemCollapsibleState.Collapsed
                 : TreeItemCollapsibleState.None);
-        this.iconPath = getIcon(test.result.state);
+
+        // If the test was run less than one day ago, display the uncached icon.
+        const now = Date.now();
+
+        if (test.result.lastRun !== undefined
+            && now - test.result.lastRun > 86400000) {
+            this.iconPath = getIcon(test.result.state);
+        }
+        else {
+            this.iconPath = getIcon(getUncachedState(test.result.state));
+        }
+
         // When a test is a paremeterTest, set the context to something else than
         // tavernTestTreeItem, so that the actions icons are not displayed when hovering it.
         this.contextValue = test.type !== TavernTestType.ParameterTest
@@ -491,10 +506,10 @@ class TavernTestTreeItem extends TreeItem {
     }
 
     updateLabel(): void {
-        this.label = TavernTestTreeItem.createLabel(this.test);
+        this.label = TavernTestTreeItem._createLabel(this.test);
     }
 
-    private static createLabel(test: TavernCrawlerTest): string {
+    private static _createLabel(test: TavernCrawlerTest): string {
         return test.type === TavernTestType.File
             ? `${test.relativeFileLocation}    [${test.childrenTestsPassCount}/${test.childrenTests.length}]`
             : test.name;

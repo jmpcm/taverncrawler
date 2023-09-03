@@ -28,24 +28,23 @@ export class TavernCrawlerTestsCache extends Map<string, TavernTestResult> {
         return result;
     }
 
-    async load(filePath?: string, reload: boolean = false): Promise<void> {
+    async load(reload: boolean = false): Promise<void> {
         if (this._cacheLoaded && !reload) {
             return;
         }
 
-        if (filePath === undefined && reload) {
+        if (this.filePath === undefined && reload) {
             throw new Error('A path for the cache file was not specified. Nothing was reloaded.');
         }
 
-        const filetoLoad = filePath ?? this.filePath;
-        this.filePath = filetoLoad;
-
-        if (!existsSync(filetoLoad)) {
-            throw new Error(`The cache file ${filePath} does not exist. Nothing was loaded.`);
+        // If the cache file doesn't exist, it is fine to ignore loading it. This might happen
+        // because the cache file was manually deleted, or it was never saved.
+        if (!existsSync(this.filePath)) {
+            return;
         }
 
         const readFileAsync = promisify(readFile);
-        const fileContent = await readFileAsync(filetoLoad, 'utf-8');
+        const fileContent = await readFileAsync(this.filePath, 'utf-8');
 
         this.clear();
 

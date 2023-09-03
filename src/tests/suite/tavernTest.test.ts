@@ -16,6 +16,7 @@ suite('TavernTest suite', () => {
     let tavernTest = new TavernCrawlerTest("test00", TavernTestType.File, "test00.file");
     tavernTest.result = {
       name: '',
+      lastRun: undefined,
       failure: '',
       state: TavernTestState.Pass
     };
