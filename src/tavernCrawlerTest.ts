@@ -244,8 +244,15 @@ export class TavernCrawlerTest {
                 child._evaluateState();
             }
 
-            state = state <= child.result.state ? child.result.state : state;
-            this._childrenTestsPassCount += child.result.state === TavernTestState.Pass ? 1 : 0;
+            // Evaluate the state using uncached values, because the cached state only matters for
+            // UI display. The test state will eb the actual value, cached or not.
+            state = getUncachedState(state) <= getUncachedState(child.result.state)
+                ? child.result.state
+                : state;
+            this._childrenTestsPassCount += (
+                child.result.state === TavernTestState.Pass
+                || child.result.state === TavernTestState.PassCached
+            ) ? 1 : 0;
         }
 
         return state;

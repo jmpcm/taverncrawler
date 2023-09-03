@@ -76,7 +76,15 @@ class DecorationsMap {
     private decorators = new Map<string, Map<number, TextEditorDecorationType>>();
 
     private static buildDecoration(test: TavernCrawlerTest): TextEditorDecorationType {
-        switch (test.result.state as TavernTestState) {
+        let state = test.result.state as TavernTestState;
+        const now = Date.now();
+
+        // If the result is less than a day old, then use its uncached value.
+        if (test.result.lastRun !== undefined && now - test.result.lastRun < 86400000) {
+            state = getUncachedState(state);
+        }
+
+        switch (state) {
             case TavernTestState.Fail:
                 return window.createTextEditorDecorationType(
                     {
@@ -427,6 +435,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
 
         if (item.parentTest !== undefined) {
             item.parentTest.iconPath = getIcon(item.parentTest.test.result.state);
+            item.parentTest.updateLabel();
         }
         this._onDidChangeTreeData.fire(undefined);
 
@@ -455,7 +464,9 @@ class TavernTestTreeItem extends TreeItem {
             TavernTestTreeItem._createLabel(test),
             test.type === TavernTestType.File
                 ? TreeItemCollapsibleState.Collapsed
-                : TreeItemCollapsibleState.None);
+                : TreeItemCollapsibleState.None
+        );
+        this.tooltip = TavernTestTreeItem._createTooltip(this.test);
 
         // If the test was run less than one day ago, display the uncached icon.
         const now = Date.now();
@@ -507,11 +518,34 @@ class TavernTestTreeItem extends TreeItem {
 
     updateLabel(): void {
         this.label = TavernTestTreeItem._createLabel(this.test);
+        this.tooltip = TavernTestTreeItem._createTooltip(this.test);
     }
 
     private static _createLabel(test: TavernCrawlerTest): string {
         return test.type === TavernTestType.File
             ? `${test.relativeFileLocation}    [${test.childrenTestsPassCount}/${test.childrenTests.length}]`
             : test.name;
+    }
+
+    private static _createTooltip(test: TavernCrawlerTest): string | undefined {
+        let tooltip: string = test.name;
+
+        if (test.type === TavernTestType.Test) {
+            const lastRun = test.result.lastRun !== undefined
+                ? new Date(test.result.lastRun).toLocaleString()
+                : 'never';
+
+            tooltip = `${tooltip}\n\nLast run: ${lastRun}`;
+        }
+
+        if (test.type === TavernTestType.File || test.childrenTests.length > 0) {
+            const total = test.childrenTests.length;
+            const pass = test.childrenTestsPassCount;
+            const fail = total - pass;
+
+            tooltip = `${tooltip}\n\nTotal tests: ${total}\nPass: ${pass}\nFail: ${fail}`;
+        }
+
+        return tooltip;
     }
 }
