@@ -168,7 +168,7 @@ class DecorationsMap {
     }
 
     setDecoration(editor: TextEditor, item: TavernTestTreeItem): void {
-        const file = basename(editor.document.fileName);
+        const file = editor.document.fileName;
         const newDecoration = DecorationsMap.buildDecoration(item.test);
 
         if (this.decorators.has(file)) {

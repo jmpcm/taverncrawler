@@ -34,8 +34,15 @@ function isSameTest(line: Buffer, testName: string): boolean {
         return false;
     }
 
-    // Start in character 12 of the testName, t oavoid the prefix 'test_name: '.
-    for (let i = 0, j = 12; i < testName.length; i++, j++) {
+    // Start in character 11 of the testName, to avoid the prefix 'test_name: '. If line starts with
+    // a double comma (0x22) or a single comma ('), then start in the 12th character, i.e. ignore 
+    // the comma.
+    for (let i = 0, j = (line[11] === 0x22 || line[11] === 0x27 ? 12 : 11);
+        i < testName.length;
+        i++, j++) {
+
+        // Check if any of the current characters is a space or newline. If it is, then the
+        // increment will have to be later calculated.
         let invalidCharTestName: boolean = [' ', '\n'].includes(testName[i]);
         let invalidCharLine: boolean = [0x20, 0x0a].includes(line[j]);
 
