@@ -6,13 +6,13 @@
         "body": [
             "---",
             "test_name: $1",
-            "  stages:",
-            "    - name: $2",
-            "      request:",
-            "        url: $3",
-            "        method: ${4|GET,POST,PUT,DELETE,PATCH|}",
-            "      response:",
-            "        status_code: $5"
+            "stages:",
+            "  - name: $2",
+            "    request:",
+            "      url: $3",
+            "      method: ${4|GET,POST,PUT,DELETE,PATCH|}",
+            "    response:",
+            "      status_code: $5"
         ],
         "description": "Tavern test snippet"
     },

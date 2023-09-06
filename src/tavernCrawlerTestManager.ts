@@ -445,7 +445,7 @@ export class TavernCrawlerTestManager {
                     : `${test.fileLocation}::"${test.nodeId.split('::')[1]}"`,
                 '-n',
                 'auto',
-                `--junit-xml=${junitFile}`,
+                `--junit-xml="${junitFile}"`,
                 '-W ignore::DeprecationWarning',
                 '--disable-warnings',
                 // The rootdir is the reference directory, from where pytest is executed and builds
@@ -460,7 +460,7 @@ export class TavernCrawlerTestManager {
                 // in multiple directories. Such nodes will have the format such as 
                 // "test.integration.testfile.tavern.yaml::Test", depending on the rootdir.
                 // More info: https://docs.pytest.org/en/7.3.x/reference/customize.html#initialization-determining-rootdir-and-configfile
-                `--rootdir=${this._testsFactory?.commonDirectoryPath}`
+                `--rootdir="${this._testsFactory?.commonDirectoryPath}"`
             ];
         } else {
             junitFile = this._testsMainJunitFile;
@@ -468,11 +468,11 @@ export class TavernCrawlerTestManager {
                 Array.from(test).join(" "),
                 '-n',
                 'auto',
-                `--junit-xml=${junitFile}`,
+                `--junit-xml="${junitFile}"`,
                 '-W ignore::DeprecationWarning',
                 '--disable-warnings',
                 // Info on the rootdir above.
-                `--rootdir=${this._testsFactory?.commonDirectoryPath}`
+                `--rootdir="${this._testsFactory?.commonDirectoryPath}"`
             ];
         }
 

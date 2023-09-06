@@ -72,6 +72,10 @@
                     "light": "resources/light/go-to-file.svg",
                     "dark": "resources/dark/go-to-file.svg"
                 }
+            },
+            {
+                "command": "taverncrawler.importOpenApi",
+                "title": "Import OpenAPI from URL"
             }
         ],
         "menus": {
@@ -97,6 +101,16 @@
                     "command": "taverncrawler.goToTest",
                     "when": "viewItem == tavernTestTreeItem",
                     "group": "inline@1"
+                }
+            ],
+            "commandPalette": [
+                {
+                    "command": "taverncrawler.runTests",
+                    "when": "editorLangId == yaml"
+                },
+                {
+                    "command": "taverncrawler.refresh",
+                    "when": "editorLangId == yaml"
                 }
             ]
         },
@@ -147,10 +161,10 @@
         },
         "snippets": [
             {
-              "language": "yaml",
-              "path": "./snippets/tavern.json"
+                "language": "yaml",
+                "path": "./snippets/tavern.json"
             }
-          ]
+        ]
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
@@ -176,6 +190,7 @@
         "typescript": "^5.0.4"
     },
     "dependencies": {
+        "@faker-js/faker": "^8.0.2",
         "fast-xml-parser": "^4.2.2",
         "oas-normalize": "^8.4.1",
         "which": "^3.0.1",

@@ -436,6 +436,7 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         if (item.parentTest !== undefined) {
             item.parentTest.iconPath = getIcon(item.parentTest.test.result.state);
             item.parentTest.updateLabel();
+            item.parentTest.collapsibleState = TreeItemCollapsibleState.Expanded;
         }
         this._onDidChangeTreeData.fire(undefined);
 

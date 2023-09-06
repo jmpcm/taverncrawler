@@ -6,8 +6,8 @@ import {
     getExtensionCacheDirectory,
     getOutputChannel
 } from './tavernCrawlerCommon';
+import { importApiSpecificationFromUrl } from './tavernCrawlerOpenApi';
 import { TavernCrawlerProvider } from './tavernCrawlerProvider';
-import { TavernCrawlerTestManager } from './tavernCrawlerTestManager';
 
 
 export async function activate(context: ExtensionContext) {
@@ -73,6 +73,7 @@ export async function activate(context: ExtensionContext) {
         tavernCrawlerProvider.refresh();
     });
 
+    commands.registerCommand('taverncrawler.importOpenApi', () => importApiSpecificationFromUrl());
     commands.registerCommand('taverncrawler.goToTest', (item) =>
         tavernCrawlerProvider.goToTest(item));
     commands.registerCommand('taverncrawler.runTest', (item) =>
