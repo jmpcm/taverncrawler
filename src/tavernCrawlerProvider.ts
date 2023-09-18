@@ -19,6 +19,8 @@ import {
     TreeDataProvider,
     TreeItem,
     TreeItemCollapsibleState,
+    TreeView,
+    TreeViewExpansionEvent,
     Uri,
     window,
     workspace
@@ -199,6 +201,8 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
     private _treeNodes: TavernTestTreeItem[] = [];
     private _workspaceTavernFiles = new Map<string, Uri>();
 
+    private _treeView: TreeView<TavernTestTreeItem>;
+
     readonly onDidChangeTreeData?: Event<TavernTestTreeItem | undefined> =
         this._onDidChangeTreeData.event;
 
@@ -210,6 +214,16 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
             this.workspacePath,
             testsFolderPath);
         this._testsManager.ouputChannel = getOutputChannel();
+
+        // Register the provider using createTreeView, so that we can access the collapse/expand 
+        // events and be able to display the current state.
+        this._treeView = window.createTreeView('taverncrawler', { treeDataProvider: this });
+        this._treeView.onDidCollapseElement((event: TreeViewExpansionEvent<TavernTestTreeItem>) => {
+            event.element.collapsibleState = TreeItemCollapsibleState.Collapsed;
+        });
+        this._treeView.onDidExpandElement((event: TreeViewExpansionEvent<TavernTestTreeItem>) => {
+            event.element.collapsibleState = TreeItemCollapsibleState.Expanded;
+        });
 
         window.onDidChangeActiveTextEditor(async (editor) => {
             if (editor !== undefined && isTavernFile(editor.document.fileName)) {
@@ -292,6 +306,10 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
 
     getChildren(element?: TavernTestTreeItem): ProviderResult<TavernTestTreeItem[]> {
         return Promise.resolve(element !== undefined ? element.children : this._treeNodes);
+    }
+
+    getParent(element: TavernTestTreeItem): ProviderResult<TavernTestTreeItem> {
+        return element.parentTest;
     }
 
     getTreeItem = (node: TavernTestTreeItem) => node;
@@ -424,12 +442,14 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
             const endTime = getNow();
             const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
             outputChannel.appendLine(
-                `${"*".repeat(10)} Stopped session ${sessionId} at ${endTime.toISOString()} (${duration} seconds) ${"*".repeat(10)}\n\n\n`);
+                `${"*".repeat(10)} Stopped session ${sessionId} at ${endTime.toISOString()} `
+                + `(${duration} seconds) ${"*".repeat(10)}\n\n\n`);
         }
 
         // Set the tree item's icon with the test's current state, update the state of each of the
         // children items and, finally, set the item's parent icon.
         item.iconPath = getIcon(item.test.result.state);
+        // item.collapsibleState = treeItemCollapsibleState;
         item.updateLabel();
         applyIconToTreeItems(item.children);
 

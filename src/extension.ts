@@ -44,12 +44,7 @@ export async function activate(context: ExtensionContext) {
         testsFolderPath = undefined;
     }
 
-    // let testsManager = new TavernCrawlerTestManager(workspacePath, testsFolderPath);
-    // testsManager.ouputChannel = getOutputChannel();
-
-    const tavernCrawlerProvider = new TavernCrawlerProvider(workspacePath, testsFolderPath);//, testsManager);
-
-    window.createTreeView('taverncrawler', { treeDataProvider: tavernCrawlerProvider });
+    const tavernCrawlerProvider = new TavernCrawlerProvider(workspacePath, testsFolderPath);
     await tavernCrawlerProvider.refresh();
 
     workspace.onDidChangeConfiguration(() => {
