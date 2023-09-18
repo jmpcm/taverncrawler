@@ -1,4 +1,4 @@
-import { basename, join } from 'path';
+import { join } from 'path';
 import {
     DecorationOptions,
     DecorationRangeBehavior,
@@ -41,6 +41,7 @@ import {
 } from './tavernCrawlerTest';
 import { TavernCrawlerTestsIndex } from './tavernCrawlerTestIndex';
 import { TavernCrawlerTestManager } from './tavernCrawlerTestManager';
+import internal = require('stream');
 
 
 const testStatIcons: Record<TavernTestState, ThemeIcon> = {
@@ -324,6 +325,9 @@ export class TavernCrawlerProvider implements TreeDataProvider<TavernTestTreeIte
         if (tavernTestFile === undefined) {
             return;
         }
+
+        // Select the tree item for this test.
+        this._treeView.reveal(item, { select: true });
 
         let document = await workspace.openTextDocument(tavernTestFile!);
         let editor = await window.showTextDocument(document);
